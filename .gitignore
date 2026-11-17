@@ -1,0 +1,38 @@
+# ===== 密钥与本地配置（绝不提交）=====
+.env
+.env.local
+*.local
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# ===== 本地模型权重 =====
+models/
+!models/.gitkeep
+
+# ===== 运行时产物 =====
+data/
+workspace/
+sandbox_tmp/
+logs/
+*.log
+*.db
+*.sqlite3
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+.DS_Store
+
+# ===== 前端（预留）=====
+node_modules/
+dist/

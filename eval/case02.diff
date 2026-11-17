@@ -1,0 +1,13 @@
+diff --git a/tests/test_order.py b/tests/test_order.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_order.py
+@@ -0,0 +1,8 @@
++import pytest
++
++from app.order import create_order
++
++
++@pytest.mark.skip(reason="flaky")
++def test_create_order():
++    create_order({"id": 1})

@@ -1,0 +1,59 @@
+# ============================================================
+# 应用层：api + worker + 沙箱镜像
+# 用法：
+#   docker compose --env-file .env.local -f docker-compose.app.yml up -d --build
+# 注意：
+#   worker 需要调用宿主机 docker 跑沙箱，挂载了 /var/run/docker.sock。
+#   生产环境不要直接挂 socket，改用独立沙箱服务 / gVisor / Firecracker（见 docs/DEPLOY.md）。
+# ============================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: codepilot/api:0.1.0
+    container_name: codepilot-api
+    restart: unless-stopped
+    env_file: .env.local
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      INLINE_WORKER: "false"
+      SANDBOX_WORKSPACE_ROOT: /workspace
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./workspace:/workspace:rw
+
+  worker:
+    image: codepilot/api:0.1.0
+    container_name: codepilot-worker
+    restart: unless-stopped
+    command: ["python", "-m", "backend.infra.worker"]
+    env_file: .env.local
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      INLINE_WORKER: "false"
+      SANDBOX_WORKSPACE_ROOT: /workspace
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      # 沙箱需要 docker CLI 操作宿主机 daemon
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace:/workspace:rw
+    group_add:
+      - "${DOCKER_GID:-999}"

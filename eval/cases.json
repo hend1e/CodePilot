@@ -1,0 +1,31 @@
+[
+  {
+    "name": "case01-secret-sql-loop",
+    "repo": "local/demo",
+    "diff_path": "eval/case01.diff",
+    "expected": [
+      {"file_path": "app/services/user_service.py", "line": 4, "rule_id": "SEC001"},
+      {"file_path": "app/services/user_service.py", "line": 11, "rule_id": "SEC002"},
+      {"file_path": "app/services/user_service.py", "line": 19, "rule_id": "PERF001"},
+      {"file_path": "app/services/user_service.py", "line": 27, "rule_id": "STY001"},
+      {"file_path": "app/services/user_service.py", "line": 24, "rule_id": "STY007"}
+    ]
+  },
+  {
+    "name": "case02-skipped-test",
+    "repo": "local/demo",
+    "diff_path": "eval/case02.diff",
+    "expected": [
+      {"file_path": "tests/test_order.py", "line": 7, "rule_id": "TEST002"},
+      {"file_path": "tests/test_order.py", "line": 8, "rule_id": "TEST003"}
+    ]
+  },
+  {
+    "name": "case03-route-no-auth",
+    "repo": "local/demo",
+    "diff_path": "eval/case03.diff",
+    "expected": [
+      {"file_path": "app/api/admin.py", "line": 7, "rule_id": "SEC010"}
+    ]
+  }
+]

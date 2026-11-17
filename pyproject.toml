@@ -1,0 +1,26 @@
+[project]
+name = "codepilot"
+version = "0.1.0"
+description = "CodePilot · 多 Agent 研发协作与代码审查平台"
+requires-python = ">=3.11,<3.13"
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.setuptools]
+packages = ["backend"]

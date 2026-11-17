@@ -1,0 +1,32 @@
+diff --git a/app/services/user_service.py b/app/services/user_service.py
+--- a/app/services/user_service.py
++++ b/app/services/user_service.py
+@@ -1,5 +1,30 @@
+ import requests
++import sqlite3
++
++DB_PASSWORD = "SuperSecret123456"
++
++
++def get_user_orders(user_id):
++    conn = sqlite3.connect("app.db")
++    cursor = conn.cursor()
++    for uid in user_id:
++        cursor.execute(f"SELECT * FROM orders WHERE user_id = {uid}")
++        rows = cursor.fetchall()
++    return rows
++
++
++def fetch_profiles(ids):
++    out = []
++    for i in ids:
++        resp = requests.get(f"https://api.example.com/profiles/{i}")
++        out.append(resp.json())
++    return out
++
++
++def processItems(Items):
++    try:
++        return [x * 2 for x in Items]
++    except Exception:
++        pass
