@@ -61,9 +61,9 @@ class Worker:
 
 
 async def main() -> None:
-    from backend.config import get_settings
     from backend.core.logger import configure_logging
     from backend.db.session import close_checkpointer, init_checkpointer
+    from backend.infra.queue import init_queue
 
     configure_logging()
     await init_queue()

@@ -18,12 +18,14 @@ make demo                           # 终端 2（INLINE_WORKER=true 时任务在
 
 优点：代码热重载；worker 直接调用宿主机 Docker，不需要挂 `docker.sock`。
 
-### B. 全容器
+### B. 全容器（单文件）
 
 ```bash
 export DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
-docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build
+docker compose -f docker-compose.all.yml up -d --build
 ```
+
+只需要基础设施时：`docker compose -f docker-compose.all.yml up -d postgres redis milvus attu`。
 
 > 两个 compose 文件必须**合并**启动：`docker-compose.app.yml` 里 api/worker 的 `depends_on` 指向 infra 文件里的 postgres/redis。
 

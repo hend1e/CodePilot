@@ -14,6 +14,7 @@ help:
 	@echo "make ingest REPO=local/demo PATH=./workspace/demo  建代码索引"
 	@echo "make demo          跑一次端到端演示审查"
 	@echo "make test          跑单测"
+	@echo "make up-all        单文件起全套（infra + api + worker）"
 	@echo "make down          停止并清理容器"
 
 venv:
@@ -24,15 +25,15 @@ install:
 	$(PIP) install -r requirements.txt
 
 up:
-	docker compose up -d
-	@echo "等待 Milvus 就绪…（首次约 30-60s）"
+	docker compose -f docker-compose.all.yml up -d postgres redis milvus attu
+	@echo "等待 Milvus 就绪…（首次约 30-60s）；本地跑代码用这一条"
 
 up-all:
-	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) \
-	  docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build
+	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) docker compose -f docker-compose.all.yml up -d --build
 
 down:
-	docker compose -f docker-compose.yml -f docker-compose.app.yml down
+	docker compose -f docker-compose.all.yml down
+	docker compose -f docker-compose.yml down
 
 logs:
 	docker compose logs -f --tail=100

@@ -1,0 +1,200 @@
+# ============================================================
+# CodePilot 单文件 Compose（基础设施 + api + worker 全在一起）
+# 用法：
+#   cp .env.example .env.local        # 至少填 LLM_API_KEY（离线演示填 mock）
+#   make sandbox-image                # 或：docker build -f docker/sandbox/Dockerfile -t codepilot/sandbox:py311 docker/sandbox
+#   docker compose -f docker-compose.all.yml up -d --build
+#
+# 只想起基础设施（本地跑代码）：docker compose -f docker-compose.all.yml up -d postgres redis milvus attu
+# 端口：PG 5434 / Redis 6381 / Milvus 19532 / Attu 30001 / API 8000
+# ============================================================
+
+name: codepilot
+
+services:
+  # ── 业务数据库 + LangGraph checkpoint ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: codepilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-codepilot}
+      POSTGRES_USER: ${DB_USER:-codepilot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-codepilot_pwd}
+      TZ: Asia/Shanghai
+    ports:
+      - "${DB_PORT:-5434}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # 仅在数据卷为空（首次启动）时自动建表
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-codepilot} -d ${DB_NAME:-codepilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ── 任务队列（Streams）+ 限流 ──
+  redis:
+    image: redis:7-alpine
+    container_name: codepilot-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes",
+              "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6381}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── Milvus 依赖：etcd（元数据，仅内网）──
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.14
+    container_name: codepilot-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    command: >
+      etcd --advertise-client-urls=http://127.0.0.1:2379
+           --listen-client-urls=http://0.0.0.0:2379
+           --data-dir=/etcd
+    volumes:
+      - etcd_data:/etcd
+
+  # ── Milvus 依赖：MinIO（对象存储，仅内网）──
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: codepilot-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+
+  # ── 向量库（不可用时检索自动降级为 PG 全文）──
+  milvus:
+    image: milvusdb/milvus:v2.4.9
+    container_name: codepilot-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - milvus_data:/var/lib/milvus
+    ports:
+      - "${MILVUS_PORT:-19532}:19530"
+    depends_on:
+      etcd:
+        condition: service_started
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  # ── 向量库可视化管理 ──
+  attu:
+    image: zilliz/attu:v2.4.12
+    container_name: codepilot-attu
+    restart: unless-stopped
+    environment:
+      # 容器内必须用服务名，不能写 localhost:19532
+      MILVUS_URL: milvus:19530
+      SERVER_PORT: "3000"
+    ports:
+      - "${ATTU_PORT:-30001}:3000"
+    depends_on:
+      milvus:
+        condition: service_healthy
+
+  # ── API（HTTP / SSE）──
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: codepilot/api:0.1.0
+    container_name: codepilot-api
+    restart: unless-stopped
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      # 容器内一律走服务名，覆盖 .env.local 里的 localhost
+      APP_ENV: ${APP_ENV:-local}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-codepilot}
+      DB_USER: ${DB_USER:-codepilot}
+      DB_PASSWORD: ${DB_PASSWORD:-codepilot_pwd}
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      SANDBOX_WORKSPACE_ROOT: /workspace
+      INLINE_WORKER: "false"          # 队列消费者交给独立 worker
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./workspace:/workspace:rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Worker（消费队列、跑图、调沙箱）──
+  # ⚠️ 挂载 docker.sock 等于把宿主机 root 交给它，仅限内网/演示；
+  #    生产请改成独立沙箱服务（见 docs/DEPLOY.md「生产加固清单」）
+  worker:
+    image: codepilot/api:0.1.0
+    container_name: codepilot-worker
+    restart: unless-stopped
+    command: ["python", "-m", "backend.infra.worker"]
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-codepilot}
+      DB_USER: ${DB_USER:-codepilot}
+      DB_PASSWORD: ${DB_PASSWORD:-codepilot_pwd}
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      SANDBOX_WORKSPACE_ROOT: /workspace
+      INLINE_WORKER: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace:/workspace:rw
+    group_add:
+      - "${DOCKER_GID:-999}"          # 与宿主机 socket 的 gid 一致
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  redis_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
