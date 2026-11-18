@@ -4,11 +4,11 @@
 from fastapi import APIRouter, Response
 from sqlalchemy import text
 
-from backend.agents.rag.store import MilvusStore
+from backend.core.knowledge_base import MilvusStore
 from backend.config import get_settings
 from backend.db.session import AsyncSessionLocal
-from backend.infra.queue import get_queue
-from backend.services import metrics
+from backend.core.queue import get_queue
+from backend.core import metrics
 
 router = APIRouter()
 settings = get_settings()

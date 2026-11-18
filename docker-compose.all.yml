@@ -168,7 +168,7 @@ services:
     image: codepilot/api:0.1.0
     container_name: codepilot-worker
     restart: unless-stopped
-    command: ["python", "-m", "backend.infra.worker"]
+    command: ["python", "-m", "backend.worker"]
     env_file:
       - path: .env.local
         required: false

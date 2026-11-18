@@ -164,6 +164,7 @@ Manual / Chat ────────┤
 ```
 
 更细的状态设计、reducer 规则、降级矩阵：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+课件章节 → 文件对照表：[docs/COURSE_MAP.md](docs/COURSE_MAP.md)。
 
 ---
 
@@ -200,22 +201,26 @@ curl -s localhost:8000/api/v1/reviews -H "authorization: Bearer $TOKEN" \
 ## 目录结构
 
 ```
-backend/
-  main.py / config.py / dependencies.py
-  core/        logger(JSON) · exceptions(retryable) · llm_factory(mock/成本) · retry · security(JWT/HMAC)
+backend/                     # 目录与课件同构，详见 docs/COURSE_MAP.md
+  main.py / worker.py / config.py / dependencies.py
+  core/        logger · exceptions · llm_factory · retry · security      ← 课件第 3 章
+               knowledge_base(Milvus+PG+混合召回) · chunking · embedding
+               reranker · query_classifier · memory                     ← 课件第 5 章
+               orchestrator(主图路由) · queue · sandbox · github
+               rate_limit · review_service · metrics
   db/          session(asyncpg + AsyncPostgresSaver) · migrations
   agents/
-    review/    state(reducer) · diff · rules(15条) · reviewers · nodes · graph · prompts · persist
-    rag/       chunking(tree-sitter/正则) · embedding(hash/local/openai) · store(Milvus+PG) · retrieval(RRF+rerank) · graph
-    testgen/   graph(生成→沙箱→回灌→interrupt)
-    orchestrator/ router(规则+LLM) · graph(主图+4子图)
-  infra/       queue(Streams/内存) · worker · sandbox(Docker断网) · github(webhook/评论) · guard(限流)
-  api/v1/      auth · reviews · webhooks · rag_api · chat(SSE) · health
-services/      review_service(建任务/跑图/恢复) · metrics
+    review/    state(reducer) · rules(15条) · diff · reviewers · nodes · graph · prompts · persist
+    qa/        state · prompts · nodes(rewrite/retrieve/answer/persist) · graph
+    testgen/   state · prompts · nodes(生成/沙箱/HitL) · graph
+  api/
+    router.py  聚合所有 v1 路由
+    v1/        auth · reviews · qa · unified_chat(SSE) · webhooks · health
+  mcp/         预留（本项目未启用 MCP Server，见 docs/COURSE_MAP.md）
 frontend/      Vue 3 + Vite（审查工作台 / 代码问答 / 任务记录），dist 随仓库提交
 scripts/       init_db.sql · seed_data · ingest_repo · demo_review · eval_review
 tests/         纯函数单测（diff/rules/reducer/chunking/router/security/sandbox）
-docs/          ARCHITECTURE · MAPPING(EduAgent→CodePilot) · DEPLOY
+docs/          COURSE_MAP(课件章节→文件) · ARCHITECTURE · MAPPING(EduAgent→CodePilot) · DEPLOY
 ```
 
 ---

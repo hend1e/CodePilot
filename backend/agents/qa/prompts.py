@@ -1,4 +1,4 @@
-# backend/agents/rag/prompts.py
+# backend/agents/qa/prompts.py
 # 代码库问答提示词：强制引用、允许说「不知道」、禁止编造文件/行号。
 
 RAG_SYSTEM = """你是企业代码库与研发规范助手。你只能依据「检索片段」回答，规则：

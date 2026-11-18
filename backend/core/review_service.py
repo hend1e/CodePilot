@@ -1,4 +1,4 @@
-# backend/services/review_service.py
+# backend/core/review_service.py
 # 任务编排服务：建任务 → 入队 → 跑图 →（可中断）→ 恢复 → 落库。
 # API / Worker 都只调这里，保证「命令行、webhook、聊天入口」行为一致。
 

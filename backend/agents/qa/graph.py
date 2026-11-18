@@ -1,9 +1,10 @@
-# backend/agents/rag/graph.py
+# backend/agents/qa/graph.py
 # 代码库 RAG 子图：rewrite → retrieve → answer → persist（线性，无分支）。
 
 from langgraph.graph import END, START, StateGraph
 
-from backend.agents.rag.nodes import RAGState, answer, persist, retrieve, rewrite_query
+from backend.agents.qa.nodes import answer, persist, retrieve, rewrite_query
+from backend.agents.qa.state import RAGState
 
 
 def build_rag_graph(checkpointer=None):
@@ -23,9 +24,14 @@ def build_rag_graph(checkpointer=None):
 
 
 async def ask(question: str, repo_id: str | None = None,
-              tenant_id: str = "tenant_default", task_id: str | None = None) -> dict:
-    """便捷入口：不落 checkpoint（一次性问答）。"""
+              tenant_id: str = "tenant_default", task_id: str | None = None,
+              thread_id: str | None = None, memory: str = "") -> dict:
+    """便捷入口：不落 checkpoint（一次性问答）。
+
+    memory：历史摘要（课件 5.9），由调用方从 core.memory 取出后注入。
+    """
     graph = build_rag_graph()
     return await graph.ainvoke({
         "question": question, "repo_id": repo_id, "tenant_id": tenant_id, "task_id": task_id,
+        "thread_id": thread_id, "memory": memory,
     })

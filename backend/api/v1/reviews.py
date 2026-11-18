@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 
 from backend.agents.review.state import summarize
 from backend.dependencies import get_current_user
-from backend.infra.queue import get_queue
-from backend.services import metrics
-from backend.services.review_service import create_task, get_task, list_tasks, resume_task
+from backend.core.queue import get_queue
+from backend.core import metrics
+from backend.core.review_service import create_task, get_task, list_tasks, resume_task
 
 router = APIRouter()
 

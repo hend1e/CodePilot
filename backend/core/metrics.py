@@ -1,4 +1,4 @@
-# backend/services/metrics.py
+# backend/core/metrics.py
 # 极简 Prometheus 指标（不引第三方库，够用即可）：审查量、发现量、降级、成本、延迟。
 
 import threading

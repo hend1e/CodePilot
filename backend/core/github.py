@@ -1,4 +1,4 @@
-# backend/infra/github.py
+# backend/core/github.py
 # GitHub 接入：webhook 解析、拉取 PR diff、回写评论。
 # 原则：网络失败不影响主流程（审查结果已落库，评论只是「通知」）。
 

@@ -5,12 +5,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from backend.agents.rag.graph import ask
-from backend.agents.rag.store import ingest_repo
+from backend.agents.qa.graph import ask
+from backend.core.knowledge_base import ingest_repo
 from backend.core.security import safe_repo_path
 from backend.db.session import AsyncSessionLocal
 from backend.dependencies import get_current_user
-from backend.services.review_service import ensure_repo
+from backend.core.review_service import ensure_repo
 
 router = APIRouter()
 
@@ -24,6 +24,7 @@ class IngestRequest(BaseModel):
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000)
     repo_id: str | None = None
+    thread_id: str | None = Field(None, description="传入则启用多轮记忆（课件 5.9）")
 
 
 @router.post("/ingest", status_code=status.HTTP_202_ACCEPTED)
@@ -48,7 +49,18 @@ async def _ingest_bg(repo_id: str, path: str, reset: bool) -> None:
 
 @router.post("/query")
 async def query(req: QueryRequest, user: dict = Depends(get_current_user)):
-    out = await ask(req.question, req.repo_id, user["tenant_id"])
+    memory = ""
+    if req.thread_id:
+        from backend.core.memory import ConversationMemory
+
+        memory = await ConversationMemory(req.thread_id, user["tenant_id"]).render()
+    out = await ask(req.question, req.repo_id, user["tenant_id"],
+                    thread_id=req.thread_id, memory=memory)
+    if req.thread_id and out.get("answer"):
+        from backend.core.memory import ConversationMemory
+
+        await ConversationMemory(req.thread_id, user["tenant_id"]).append(
+            req.question, out["answer"])
     return {
         "answer": out.get("answer", ""),
         "citations": out.get("citations", []),

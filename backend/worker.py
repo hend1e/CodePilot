@@ -1,4 +1,4 @@
-# backend/infra/worker.py
+# backend/worker.py
 # 消费者：从 Redis Stream 取任务 → 跑审查图。可多副本水平扩展（消费组自动分片）。
 # 优雅退出：收到 SIGTERM 处理完当前任务再退出。
 
@@ -6,8 +6,8 @@ import asyncio
 import signal
 
 from backend.core.logger import get_logger
-from backend.infra.queue import get_queue
-from backend.services.review_service import run_review_task
+from backend.core.queue import get_queue
+from backend.core.review_service import run_review_task
 
 logger = get_logger(__name__)
 
@@ -63,7 +63,7 @@ class Worker:
 async def main() -> None:
     from backend.core.logger import configure_logging
     from backend.db.session import close_checkpointer, init_checkpointer
-    from backend.infra.queue import init_queue
+    from backend.core.queue import init_queue
 
     configure_logging()
     await init_queue()

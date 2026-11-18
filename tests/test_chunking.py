@@ -1,6 +1,6 @@
 """代码切分单测：函数级切分、行号正确、长函数滑窗、非 Python 兜底。"""
 
-from backend.agents.rag.chunking import chunk_file, iter_repo_files
+from backend.core.chunking import chunk_file, iter_repo_files
 
 PY = '''"""module doc"""
 import os
@@ -67,7 +67,7 @@ def test_iter_repo_files_filters(tmp_path):
 
 
 def test_term_queries_and_search_text():
-    from backend.agents.rag.chunking import search_text, term_queries
+    from backend.core.chunking import search_text, term_queries
 
     terms = term_queries("鉴权中间件 AuthMiddleware 怎么用")
     assert "authmiddleware" in terms

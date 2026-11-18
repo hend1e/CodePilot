@@ -8,9 +8,9 @@
 | 课件 Agent | 范式 | 本项目实现 | 代码位置 |
 |---|---|---|---|
 | ① PR 审查 Agent | 并行评审（第 4 章） | 四维 Send 并行 + 规则引擎 + 证据校验 + 分级聚合 | `backend/agents/review/` |
-| ② 代码库 RAG Agent | RAG（第 5 章） | 函数级切分 + 混合召回 + RRF + 精排 + 引用校验 | `backend/agents/rag/` |
-| ③ 测试生成 Agent | 沙箱 + HitL（第 6 章） | 生成 → 沙箱真跑 → 失败回灌 ≤2 轮 → interrupt 人工确认 | `backend/agents/testgen/`、`backend/infra/sandbox.py` |
-| 意图路由 | 路由分发（8.4） | 规则前置 + LLM 分类 → 主图分支 | `backend/agents/orchestrator/` |
+| ② 代码库 RAG Agent | RAG（第 5 章） | 函数级切分 + 混合召回 + RRF + 精排 + 引用校验 | `backend/agents/qa/` + `backend/core/knowledge_base.py` |
+| ③ 测试生成 Agent | 沙箱 + HitL（第 6 章） | 生成 → 沙箱真跑 → 失败回灌 ≤2 轮 → interrupt 人工确认 | `backend/agents/testgen/`、`backend/core/sandbox.py` |
+| 意图路由 | 路由分发（8.4） | 规则前置 + LLM 分类 → 主图分支 | `backend/core/orchestrator.py` |
 | 统一入口 SSE | 8.5 | 事件流 route/citations/token/stage/result/done | `backend/api/v1/chat.py` |
 
 > 课件里的「④ 缺陷定位 Agent」本项目**没有实现**：简历上没有这条，就不放进来充数。
@@ -104,5 +104,5 @@ FROM review_tasks WHERE status = 'done';
 ## 五、面试被追问时的三个诚实点
 
 1. **「4 维并行」不是 4 个独立模型**：同一模型 + 不同 prompt + 不同规则子集，并行是为了延迟与隔离，不是为了「多模型投票」。
-2. **没有接 GitLab**：`infra/github.py` 只有 GitHub 实现，`repos.provider` 留了 gitlab 枚举但没有适配器。被问就说「抽象了 provider 字段，GitLab 适配器是下一步」。
+2. **没有接 GitLab**：`core/github.py` 只有 GitHub 实现，`repos.provider` 留了 gitlab 枚举但没有适配器。被问就说「抽象了 provider 字段，GitLab 适配器是下一步」。
 3. **没有 K8s / 多租户硬隔离**：`tenant_id` 贯穿所有表，但隔离靠查询条件，不是行级安全（RLS）。生产化时应该加 RLS。

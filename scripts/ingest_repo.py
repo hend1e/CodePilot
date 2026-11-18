@@ -9,7 +9,7 @@ import asyncio
 import os
 
 from backend.core.logger import configure_logging
-from backend.services.review_service import ensure_repo
+from backend.core.review_service import ensure_repo
 
 
 async def main() -> None:
@@ -22,7 +22,7 @@ async def main() -> None:
 
     configure_logging()
 
-    from backend.agents.rag.store import ingest_repo
+    from backend.core.knowledge_base import ingest_repo
 
     repo = await ensure_repo(args.tenant, args.repo, provider="local", local_path=args.path)
     stats = await ingest_repo(repo["id"], args.path, reset=not args.no_reset)

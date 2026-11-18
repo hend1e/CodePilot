@@ -11,13 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.v1 import auth, chat, health, rag_api, reviews, webhooks
+from backend.api.router import api_router
 from backend.config import get_settings
 from backend.core.exceptions import CodePilotError, InvalidInput
 from backend.core.logger import configure_logging, get_logger
 from backend.db.migrations import run_migrations
 from backend.db.session import close_checkpointer, init_checkpointer
-from backend.infra.queue import get_queue, init_queue
+from backend.core.queue import get_queue, init_queue
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -26,7 +26,7 @@ _inline_worker_task: asyncio.Task | None = None
 
 
 async def _start_inline_worker() -> None:
-    from backend.infra.worker import Worker
+    from backend.worker import Worker
 
     worker = Worker(concurrency=2)
     global _inline_worker_task
@@ -84,12 +84,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router, tags=["health"])
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(reviews.router, prefix="/api/v1/reviews", tags=["reviews"])
-app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
-app.include_router(rag_api.router, prefix="/api/v1/rag", tags=["rag"])
-app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(api_router)
 
 
 @app.exception_handler(CodePilotError)

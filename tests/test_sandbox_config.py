@@ -2,7 +2,7 @@
 
 import json
 
-from backend.infra.sandbox import SandboxRunner
+from backend.core.sandbox import SandboxRunner
 
 
 def test_collect_parses_summary_and_coverage(tmp_path):

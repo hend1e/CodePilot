@@ -8,11 +8,11 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from backend.core.security import verify_github_signature
 from backend.core.logger import get_logger
-from backend.infra.guard import check_rate_limit
-from backend.infra.github import parse_webhook
-from backend.infra.queue import get_queue
-from backend.services import metrics
-from backend.services.review_service import create_task
+from backend.core.rate_limit import check_rate_limit
+from backend.core.github import parse_webhook
+from backend.core.queue import get_queue
+from backend.core import metrics
+from backend.core.review_service import create_task
 
 router = APIRouter()
 logger = get_logger(__name__)

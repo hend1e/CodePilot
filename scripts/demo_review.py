@@ -101,7 +101,7 @@ async def online() -> None:
 async def offline() -> None:
     from backend.core.logger import configure_logging
     from backend.db.session import init_checkpointer
-    from backend.services.review_service import create_task, run_review_task
+    from backend.core.review_service import create_task, run_review_task
 
     configure_logging()
     os.environ.setdefault("INLINE_WORKER", "false")

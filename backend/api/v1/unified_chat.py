@@ -9,16 +9,16 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from backend.agents.orchestrator.router import classify
-from backend.agents.rag.nodes import persist as rag_persist
-from backend.agents.rag.prompts import RAG_SYSTEM, RAG_USER, build_context
-from backend.agents.rag.retrieval import retrieve_context
+from backend.core.orchestrator import classify
+from backend.agents.qa.nodes import persist as rag_persist
+from backend.agents.qa.prompts import RAG_SYSTEM, RAG_USER, build_context
+from backend.core.knowledge_base import retrieve_context
 from backend.config import get_settings
 from backend.core.llm_factory import get_llm
 from backend.core.logger import get_logger
 from backend.dependencies import get_current_user
-from backend.services import metrics
-from backend.services.review_service import create_task, run_review_task
+from backend.core import metrics
+from backend.core.review_service import create_task, run_review_task
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     repo: str = "local/repo"
     repo_id: str | None = None
     pr_number: int | None = None
+    thread_id: str | None = Field(None, description="传入则启用多轮记忆（课件 5.9）")
 
 
 def _sse(event: str, data: dict) -> dict:
@@ -83,6 +84,9 @@ async def _stream(req: ChatRequest, user: dict):
 
 
 async def _qa_stream(req: ChatRequest, user: dict):
+    from backend.core.memory import ConversationMemory
+
+    memory = ConversationMemory(req.thread_id, user["tenant_id"]) if req.thread_id else None
     try:
         ctx = await retrieve_context(req.message, req.repo_id, user["tenant_id"],
                                      top_k=settings.rerank_top_k)
@@ -95,11 +99,12 @@ async def _qa_stream(req: ChatRequest, user: dict):
         "citation", "path", "symbol", "start_line", "end_line")} for c in chunks],
         "degraded": ctx.get("degraded", False)})
 
+    mem_text = await memory.render() if memory else ""
     llm = get_llm("rag_answer", temperature=0.1, streaming=True)
     answer_parts: list[str] = []
 
     if llm is None:
-        from backend.agents.rag.nodes import _citations, _extractive
+        from backend.agents.qa.nodes import _citations, _extractive
 
         text_out = _extractive(chunks)
         answer_parts.append(text_out)
@@ -109,7 +114,8 @@ async def _qa_stream(req: ChatRequest, user: dict):
         messages = [
             {"role": "system", "content": RAG_SYSTEM},
             {"role": "user", "content": RAG_USER.format(
-                question=req.message, context=build_context(chunks))},
+                question=req.message,
+                context=(f"{mem_text}\n\n" if mem_text else "") + build_context(chunks))},
         ]
         invalid = 0
         try:
@@ -121,7 +127,7 @@ async def _qa_stream(req: ChatRequest, user: dict):
         except Exception as e:      # noqa: BLE001
             yield _sse("error", {"message": f"生成失败: {e}"[:300]})
             return
-        from backend.agents.rag.nodes import _citations
+        from backend.agents.qa.nodes import _citations
 
         citations, invalid = _citations("".join(answer_parts), chunks)
 
@@ -130,5 +136,7 @@ async def _qa_stream(req: ChatRequest, user: dict):
         "answer": "".join(answer_parts), "citations": citations,
         "degraded": ctx.get("degraded", False) or invalid > 0,
     })
+    if memory:
+        await memory.append(req.message, "".join(answer_parts))
     metrics.inc("codepilot_rag_queries_total", degraded=str(ctx.get("degraded", False)))
     yield _sse("done", {"citations": len(citations), "invalid_citations": invalid})

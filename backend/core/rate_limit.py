@@ -1,4 +1,4 @@
-# backend/infra/guard.py
+# backend/core/rate_limit.py
 # 轻量限流 + 幂等辅助：Redis 计数器（INCR + EXPIRE），Redis 不可用时放行（不阻断业务）。
 
 import time

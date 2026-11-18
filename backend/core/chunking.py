@@ -1,4 +1,4 @@
-# backend/agents/rag/chunking.py
+# backend/core/chunking.py
 # 代码切分：按「函数/类」切，而不是按字符窗口切。
 # 优先用 tree-sitter（Python）；不可用时退回缩进感知的正则扫描 —— 两条路径输出同样结构。
 # 为什么函数级：一个函数被切断，检索到的就是半个语义，RAG 必然答不准。

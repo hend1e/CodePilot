@@ -89,28 +89,6 @@ TRIAGE_SYSTEM = """你是 PR 分诊器。根据 diff 统计与文件列表，判
 needs_ctx 表示是否需要检索内部规范/相似代码（涉及鉴权、数据库、公共组件时为 true）。"""
 
 
-TESTGEN_SYSTEM = """你是 Python 测试工程师。为给定函数生成 pytest 单测。
-要求：
-1. 只测试 diff 中新增/修改的函数，不要臆造不存在的接口。
-2. 覆盖：正常路径、边界条件、异常路径；用 monkeypatch/mocker 隔离外部依赖（数据库、HTTP）。
-3. 不访问网络、不写文件、不依赖真实时间。
-4. 输出完整可运行文件，import 路径按仓库结构修正。
-5. 只输出代码，不要解释，不要 Markdown 围栏。"""
-
-
-def build_testgen_prompt(symbols: list[dict], diff_text: str) -> str:
-    lines = "\n".join(f"- {s['path']}::{s['symbol']} ({s['kind']})" for s in symbols)
-    return f"""## 目标符号
-{lines}
-
-## diff
-```
-{diff_text}
-```
-
-请生成 `tests/test_generated.py` 的完整内容。"""
-
-
 RAG_SYSTEM = """你是研发知识库助手。只根据提供的检索片段回答。
 规则：
 1. 每个结论后用 [n] 标注来源编号，例如：鉴权统一走 AuthMiddleware [2]。

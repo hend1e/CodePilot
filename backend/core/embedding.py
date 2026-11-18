@@ -1,4 +1,4 @@
-# backend/agents/rag/embedding.py
+# backend/core/embedding.py
 # 向量化后端：hash（零依赖）/ local（BGE-M3）/ openai（兼容 /embeddings）。
 # 统一出口 Embedder.embed()，切换后端只改 .env，不改调用方。
 

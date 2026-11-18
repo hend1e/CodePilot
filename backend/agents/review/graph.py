@@ -7,17 +7,20 @@ from langgraph.graph import END, START, StateGraph
 from backend.agents.review.nodes import (
     aggregate,
     fanout_dimensions,
-    human_gate,
     ingest,
     publish,
     retrieve_ctx,
     review_one,
     route_after_aggregate,
-    route_after_sandbox,
-    route_after_testgen,
-    sandbox_node,
-    testgen,
     triage,
+)
+# 单测链路复用 testgen 子图的节点实现，保证两条链路行为一致
+from backend.agents.testgen.nodes import (
+    gate as human_gate,
+    generate as testgen,
+    route_after_generate,
+    route_after_sandbox,
+    sandbox as sandbox_node,
 )
 from backend.agents.review.state import ReviewState
 from backend.db.session import get_checkpointer
@@ -46,7 +49,7 @@ def build_review_graph(checkpointer=None, *, with_hitl: bool = True):
     builder.add_edge("review_one", "aggregate")
     builder.add_conditional_edges("aggregate", route_after_aggregate,
                                   ["testgen", "publish"])
-    builder.add_conditional_edges("testgen", route_after_testgen, ["sandbox", "publish"])
+    builder.add_conditional_edges("testgen", route_after_generate, ["sandbox", "publish"])
     targets = ["human_gate", "publish"] if with_hitl else ["publish", "testgen"]
     builder.add_conditional_edges("sandbox", route_after_sandbox, targets)
     if with_hitl:

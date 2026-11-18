@@ -51,7 +51,7 @@ api:
 	$(PY) -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 worker:
-	$(PY) -m backend.infra.worker
+	$(PY) -m backend.worker
 
 ingest:
 	$(PY) -m scripts.ingest_repo --repo $(REPO) --path $(PATH)

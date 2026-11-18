@@ -1,4 +1,4 @@
-# backend/infra/queue.py
+# backend/core/queue.py
 # 任务队列：Redis Streams（消费组 + ACK + 重投），Redis 不可用时退化为进程内队列。
 # 为什么用 Streams 而不是 Celery：少一个中间件、支持消费组、天然可观测。
 

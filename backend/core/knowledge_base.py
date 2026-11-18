@@ -1,15 +1,19 @@
-# backend/agents/rag/store.py
-# Milvus 向量存储 + PostgreSQL 元数据/全文索引。
-# 分工：Milvus 只存 id + vector（负责语义召回）；PG 存正文与行号（负责稀疏召回、引用、展示）。
+# backend/core/knowledge_base.py
+# 代码知识库（对应课件第 5 章）：
+#   建索引：遍历仓库 → 函数级切分 → 向量化 → 写 Milvus + PG
+#   检索：dense(Milvus) + sparse(PG 全文) → RRF 融合 → 精排 → Top-K
+# Milvus 只存 id + vector（语义召回）；PG 存正文/行号（稀疏召回、引用、展示）。
 
 import hashlib
+import time
 import uuid
 from pathlib import Path
 
 from sqlalchemy import text
 
-from backend.agents.rag.chunking import CodeChunk, chunk_file, iter_repo_files, search_text
-from backend.agents.rag.embedding import get_embedder
+from backend.core.chunking import CodeChunk, chunk_file, iter_repo_files, search_text, term_queries
+from backend.core.embedding import get_embedder
+from backend.core.reranker import rerank
 from backend.config import get_settings
 from backend.core.exceptions import MilvusUnavailable, RetrievalError
 from backend.core.logger import get_logger
@@ -269,3 +273,111 @@ async def _embed_batch(embedder, batch: list[tuple[CodeChunk, str]], repo_id: st
             "symbol": chunk.symbol,
         })
     return rows
+
+
+# ──────────────────────────────────────────────────────────────
+# 检索（课件 5.6 混合召回 / 5.7 重排序）
+# ──────────────────────────────────────────────────────────────
+
+def _rrf(rank: int) -> float:
+    return 1.0 / (60 + rank)
+
+
+async def _dense(query: str, repo_id: str | None, limit: int) -> tuple[list[tuple[str, float]], str | None]:
+    try:
+        vec = (await get_embedder().embed([query]))[0]
+        hits = await MilvusStore().search(vec, repo_id, top_k=limit)
+        return [(h["id"], h["score"]) for h in hits], None
+    except Exception as e:      # noqa: BLE001 —— 向量库不可用不是致命错误
+        logger.warning("retrieval.dense_degraded", error=str(e)[:200])
+        return [], f"dense_unavailable:{type(e).__name__}"
+
+
+async def _sparse(query: str, repo_id: str | None, limit: int) -> list[tuple[str, float]]:
+    terms = term_queries(query)
+    if not terms:
+        return []
+    tsq = " | ".join(terms)
+    sql = """
+        SELECT id, ts_rank_cd(sparse_tsv, to_tsquery('simple', CAST(:q AS TEXT))) AS rank
+        FROM code_chunks
+        WHERE sparse_tsv @@ to_tsquery('simple', CAST(:q AS TEXT))
+          AND (CAST(:rid AS TEXT) IS NULL OR repo_id = CAST(:rid AS UUID))
+        ORDER BY rank DESC
+        LIMIT :lim
+    """
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(text(sql), {"q": tsq, "rid": repo_id, "lim": limit})).fetchall()
+    return [(str(r.id), float(r.rank)) for r in rows]
+
+
+async def _load_chunks(ids: list[str]) -> dict[str, dict]:
+    if not ids:
+        return {}
+    sql = """
+        SELECT id, repo_id, path, symbol, symbol_type, start_line, end_line, content
+        FROM code_chunks WHERE id = ANY(:ids)
+    """
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(text(sql), {"ids": ids})).fetchall()
+    return {
+        str(r.id): {"id": str(r.id), "path": r.path, "symbol": r.symbol,
+                    "symbol_type": r.symbol_type, "start_line": r.start_line,
+                    "end_line": r.end_line, "content": r.content}
+        for r in rows
+    }
+
+
+async def retrieve_context(query: str, repo_id: str | None = None,
+                           tenant_id: str | None = None, top_k: int | None = None) -> dict:
+    """返回 {"chunks": [...], "degraded": bool, "latency_ms": int, "fusion": "rrf"}。
+
+    降级约定：Milvus 挂了只用 PG 全文，结果照常返回，degraded=True。
+    """
+    started = time.monotonic()
+    top_k = top_k or _settings.rerank_top_k
+    width = max(_settings.retrieve_top_k, top_k * 2)
+    if not query.strip():
+        raise RetrievalError("query 为空")
+
+    dense, dense_error = await _dense(query, repo_id, width)
+    try:
+        sparse = await _sparse(query, repo_id, width)
+    except Exception as e:      # noqa: BLE001
+        logger.warning("retrieval.sparse_degraded", error=str(e)[:200])
+        sparse = []
+
+    fused: dict[str, dict] = {}
+    for rank, (cid, score) in enumerate(dense):
+        fused.setdefault(cid, {"rrf": 0.0})["rrf"] += _rrf(rank + 1)
+        fused[cid]["dense_score"] = score
+    for rank, (cid, score) in enumerate(sparse):
+        fused.setdefault(cid, {"rrf": 0.0})["rrf"] += _rrf(rank + 1)
+        fused[cid]["sparse_score"] = score
+
+    details = await _load_chunks(list(fused.keys()))
+    items: list[dict] = []
+    seen: set[tuple] = set()
+    for cid, meta in details.items():
+        key = (meta["path"], meta["symbol"], meta["start_line"], meta["end_line"])
+        if key in seen:         # window 子块与父块重复，优先保留语义块
+            continue
+        seen.add(key)
+        items.append({**meta, **fused[cid], "citation": f"{meta['path']}"
+                      + (f"::{meta['symbol']}" if meta["symbol"] else "")
+                      + f":{meta['start_line']}-{meta['end_line']}"})
+
+    items, rerank_backend = await rerank(query, items, top_k)
+    latency = int((time.monotonic() - started) * 1000)
+    degraded = bool(dense_error) or not dense
+
+    logger.info("retrieval.done", query_len=len(query), dense=len(dense), sparse=len(sparse),
+                kept=len(items), rerank=rerank_backend, degraded=degraded, latency_ms=latency)
+    return {
+        "chunks": items,
+        "degraded": degraded,
+        "dense_error": dense_error,
+        "rerank_backend": rerank_backend,
+        "latency_ms": latency,
+        "fusion": "rrf",
+    }

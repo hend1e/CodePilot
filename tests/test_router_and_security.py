@@ -5,10 +5,11 @@ import hmac
 
 import pytest
 
-from backend.agents.orchestrator.router import rule_route
-from backend.agents.rag.retrieval import _lexical_overlap, _rrf
+from backend.core.orchestrator import rule_route
+from backend.core.knowledge_base import _rrf
+from backend.core.reranker import lexical_overlap, query_tokens
 from backend.core.security import safe_repo_path, verify_github_signature
-from backend.infra.github import parse_webhook
+from backend.core.github import parse_webhook
 
 
 def test_rule_route_pr_url():
@@ -31,8 +32,8 @@ def test_rrf_monotonic():
 
 
 def test_lexical_overlap():
-    assert _lexical_overlap({"auth", "middleware"}, "class AuthMiddleware: ...") > 0
-    assert _lexical_overlap({"zzz"}, "abc") == 0.0
+    assert lexical_overlap(query_tokens("AuthMiddleware"), "class AuthMiddleware: ...") > 0
+    assert lexical_overlap({"zzz"}, "abc") == 0.0
 
 
 def test_webhook_parse_filters_actions():

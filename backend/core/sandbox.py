@@ -1,4 +1,4 @@
-# backend/infra/sandbox.py
+# backend/core/sandbox.py
 # 沙箱执行器：把 LLM 生成的测试放进一次性容器里跑。
 # 安全边界：--network none（断网）、内存/CPU/PID 限额、只挂载临时工作区、非 root、超时强杀。
 # 设计取舍：docker 不可用时允许 local 模式（仅本机开发），生产必须 docker。

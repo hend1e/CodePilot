@@ -96,7 +96,7 @@ question
 | 回灌轮次 | `testgen_rounds < 2` | 最多重生成 2 轮 |
 | 幂等键 | `(repo, pr, head_sha)` | 重复 webhook 不重复审查 |
 | 新 commit 取消旧任务 | `review_tasks.status='superseded'` | 省成本、防结果错乱 |
-| 仓库限流 | `infra/guard.py` | 60s 窗口 30 次 |
+| 仓库限流 | `core/rate_limit.py` | 60s 窗口 30 次 |
 
 ## 7. 降级矩阵
 

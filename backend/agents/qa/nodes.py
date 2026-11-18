@@ -1,22 +1,22 @@
-# backend/agents/rag/nodes.py
+# backend/agents/qa/nodes.py
 # 代码库 RAG 子图：改写 → 多路召回 → 融合 → 生成 → 引用校验 → 落审计。
 # 没有 LLM 时退化为「抽取式回答」：直接给最相关的片段 + 引用，不编造。
 
 import asyncio
 import json
 import re
-from typing import TypedDict
-
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from backend.agents.rag.prompts import (
+from backend.agents.qa.state import RAGState
+from backend.agents.qa.prompts import (
     QUERY_REWRITE_SYSTEM, RAG_SYSTEM, RAG_USER, build_context,
 )
-from backend.agents.rag.retrieval import retrieve_context
+from backend.core.knowledge_base import retrieve_context
 from backend.config import get_settings
 from backend.core.llm_factory import get_llm, get_structured_llm
+from backend.core.query_classifier import classify_question
 from backend.core.logger import get_logger
 from backend.db.session import AsyncSessionLocal
 
@@ -27,27 +27,16 @@ _CITE_RE = re.compile(r"\[(\d{1,2})\]")
 MAX_MERGED = 12
 
 
-class RAGState(TypedDict, total=False):
-    question: str
-    repo_id: str | None
-    tenant_id: str
-    task_id: str | None
-    queries: list[str]
-    chunks: list[dict]
-    answer: str
-    citations: list[dict]
-    degraded: bool
-    invalid_citations: int
-
-
 class _QueriesOut(BaseModel):
     queries: list[str] = []
 
 
 async def rewrite_query(state: RAGState) -> dict:
+    """规则先分类（课件 5.8），再决定要不要 LLM 改写（HyDE / 多 Query）。"""
     q = state["question"].strip()
+    qtype = classify_question(q)
     queries = [q]
-    if settings.llm_enabled and len(q) > 6:
+    if settings.llm_enabled and (qtype["needs_multi_query"] or len(q) > 6):
         llm = get_structured_llm("rag_hyde", _QueriesOut)
         if llm is not None:
             try:
@@ -59,7 +48,9 @@ async def rewrite_query(state: RAGState) -> dict:
                 queries = [q, *[x for x in out.queries if x.strip() and x != q][:2]]
             except Exception as e:      # noqa: BLE001
                 logger.warning("rag.rewrite_degraded", error=str(e)[:200])
-    return {"queries": queries[:3], "degraded": False}
+    # 命中符号/路径时补一条精确查询，提升代码定位命中率
+    queries.extend(qtype.get("symbols", [])[:2])
+    return {"queries": queries[:4], "question_type": qtype, "degraded": False}
 
 
 async def retrieve(state: RAGState) -> dict:
@@ -101,6 +92,9 @@ def _extractive(chunks: list[dict]) -> str:
 async def answer(state: RAGState) -> dict:
     chunks = state.get("chunks", [])
     context = build_context(chunks)
+    memory = (state.get("memory") or "").strip()
+    if memory:
+        context = f"{memory}\n\n{context}"
 
     if not settings.llm_enabled:
         text_out = _extractive(chunks)
