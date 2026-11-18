@@ -125,7 +125,7 @@ LLM_PRICE_OUTPUT_PER_M=2.19
 | `codepilot-etcd` | etcd v3.5.14 | - | Milvus 元数据 |
 | `codepilot-minio` | minio RELEASE.2023-03-20 | - | Milvus 对象存储 |
 | `codepilot-milvus` | milvus v2.4.9 | `19532` | 向量库（不可用自动降级） |
-| `codepilot-attu` | attu v2.4.12 | `30001` | 向量库可视化 |
+| `codepilot-attu` | attu v2.4.12 | `30010` | 向量库可视化 |
 | `codepilot-api` | 自建 | `8000` | HTTP / SSE |
 | `codepilot-worker` | 自建 | - | 消费任务、跑图、调沙箱 |
 | `codepilot/sandbox:py311` | 自建 | 一次性 | 跑生成的单测（断网、限额） |

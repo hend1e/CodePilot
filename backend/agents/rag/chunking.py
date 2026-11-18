@@ -78,20 +78,38 @@ def _ts_chunks(path: str, content: str) -> list[CodeChunk] | None:
 
     lines = content.split("\n")
     chunks: list[CodeChunk] = []
+    raw = content.encode("utf-8")
 
-    def visit(node, depth: int = 0):
-        if node.type in ("function_definition", "class_definition"):
-            name_node = node.child_by_field_name("name")
-            name = content[name_node.start_byte:name_node.end_byte] if name_node else ""
-            stype = "class" if node.type == "class_definition" else "function"
+    def _name(node) -> str:
+        n = node.child_by_field_name("name")
+        if not n:
+            return ""
+        # start_byte/end_byte 是字节偏移，文件含中文时必须按字节切再解码
+        return raw[n.start_byte:n.end_byte].decode("utf-8", "ignore")
+
+    def visit(node, prefix: str = ""):
+        if node.type == "function_definition":
+            name = _name(node)
             start = node.start_point[0]
             end = node.end_point[0]
-            chunks.append(CodeChunk(path, name, stype, start + 1, end + 1,
+            chunks.append(CodeChunk(path, f"{prefix}{name}", "function", start + 1, end + 1,
                                     "\n".join(lines[start:end + 1]), "python"))
-            if depth == 0:      # 方法不再单独切（跟随类一起，避免语义碎片）
-                return
+            return                       # 嵌套函数不单独切，跟随外层语义
+        if node.type == "class_definition":
+            cls = _name(node)
+            body = node.child_by_field_name("body")
+            # 方法在 block 节点里，不在 class 的直接 children 里
+            has_method = any(c.type == "function_definition"
+                             for c in (body.children if body else []))
+            if not has_method:           # 没有方法的类（纯数据类）整体作为一块
+                start, end = node.start_point[0], node.end_point[0]
+                chunks.append(CodeChunk(path, cls, "class", start + 1, end + 1,
+                                        "\n".join(lines[start:end + 1]), "python"))
+            for child in node.children:
+                visit(child, f"{prefix}{cls}.")
+            return
         for child in node.children:
-            visit(child, depth + 1)
+            visit(child, prefix)
 
     visit(tree.root_node)
     if not chunks:

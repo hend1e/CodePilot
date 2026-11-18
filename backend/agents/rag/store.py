@@ -71,7 +71,7 @@ class MilvusStore:
             return
         self.ensure(len(rows[0]["vector"]))
         try:
-            await with_retry(lambda: _run(self._client.upsert(self.collection, rows)),
+            await with_retry(lambda: _run(self._client.upsert, self.collection, rows),
                              attempts=3, label="milvus.upsert")
             logger.info("milvus.upserted", count=len(rows))
         except Exception as e:      # noqa: BLE001
@@ -82,11 +82,12 @@ class MilvusStore:
         expr = f'repo_id == "{repo_id}"' if repo_id else None
         try:
             hits = await with_retry(
-                lambda: _run(self._client.search(
+                lambda: _run(
+                    self._client.search,
                     collection_name=self.collection, data=[vector], limit=top_k,
                     filter=expr or "", output_fields=["repo_id", "path", "symbol"],
                     search_params={"metric_type": "COSINE", "params": {"nprobe": 16}},
-                )),
+                ),
                 attempts=2, label="milvus.search",
             )
             return [{"id": h["id"], "score": float(h["distance"])} for h in (hits[0] if hits else [])]
@@ -96,7 +97,8 @@ class MilvusStore:
     async def delete_repo(self, repo_id: str) -> None:
         try:
             self.ensure(self.dim)
-            await _run(self._client.delete(self.collection, filter=f'repo_id == "{repo_id}"'))
+            await _run(self._client.delete, self.collection,
+                       filter=f'repo_id == "{repo_id}"')
         except Exception as e:      # noqa: BLE001
             logger.warning("milvus.delete_failed", repo_id=repo_id, error=str(e))
 
@@ -108,11 +110,15 @@ class MilvusStore:
             return False
 
 
-async def _run(fn):
-    """pymilvus 是同步 SDK，丢线程池避免阻塞事件循环。"""
+async def _run(fn, *args, **kwargs):
+    """pymilvus 是同步 SDK，丢线程池避免阻塞事件循环。
+
+    注意：fn 必须是「函数本身」，不能是已经调用过的结果 —— 之前把
+    `client.delete(...)` 的返回值传进来，才会报 `OmitZeroDict is not callable`。
+    """
     import asyncio
 
-    return await asyncio.to_thread(fn)
+    return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 def _sha(text_value: str) -> str:

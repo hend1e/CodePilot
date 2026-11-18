@@ -25,16 +25,19 @@ async def gamma():
 def test_python_chunk_by_symbol():
     chunks = chunk_file("pkg/mod.py", PY)
     names = {c.symbol for c in chunks}
-    assert {"__module__", "alpha", "Beta", "gamma"} <= names
+    # 类只作为方法前缀出现，避免「类块 + 方法块」重复索引
+    assert {"__module__", "alpha", "Beta.method", "gamma"} <= names
     alpha = next(c for c in chunks if c.symbol == "alpha")
     assert alpha.start_line == 7 and alpha.end_line == 8
     assert "return x + 1" in alpha.content
     assert alpha.citation() == "pkg/mod.py::alpha:7-8"
 
 
-def test_class_contains_method():
-    beta = next(c for c in chunk_file("pkg/mod.py", PY) if c.symbol == "Beta")
-    assert "def method" in beta.content
+def test_class_methods_are_split_with_prefix():
+    chunks = chunk_file("pkg/mod.py", PY)
+    method = next(c for c in chunks if c.symbol == "Beta.method")
+    assert "return 2" in method.content
+    assert not any(c.symbol == "Beta" for c in chunks)      # 不再重复切整个类
 
 
 def test_long_function_is_split_with_overlap():

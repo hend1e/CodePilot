@@ -48,6 +48,8 @@ services:
       MILVUS_PORT: 19530
       INLINE_WORKER: "false"
       SANDBOX_WORKSPACE_ROOT: /workspace
+    healthcheck:
+      disable: true          # worker 不监听端口，镜像里的 HTTP 健康检查在这里不适用
     depends_on:
       api:
         condition: service_started

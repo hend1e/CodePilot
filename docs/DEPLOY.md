@@ -44,7 +44,7 @@ API：`http://localhost:8000/docs`；Attu：`http://localhost:30000`。
 | `codepilot-etcd` | `quay.io/coreos/etcd:v3.5.14` | 不暴露 | Milvus 元数据 | ✅（用 Milvus 时） |
 | `codepilot-minio` | `minio/minio:RELEASE.2023-03-20...` | 不暴露 | Milvus 对象存储 | ✅（用 Milvus 时） |
 | `codepilot-milvus` | `milvusdb/milvus:v2.4.9` | 19532→19530 | 向量库 | 可选（缺省降级为纯全文检索） |
-| `codepilot-attu` | `zilliz/attu:v2.4.12` | 30001→3000 | Milvus 可视化 | 可选 |
+| `codepilot-attu` | `zilliz/attu:v2.4.12` | 30010→3000 | Milvus 可视化 | 可选 |
 | `codepilot-api` | 自建 `codepilot/api:0.1.0` | 8000→8000 | HTTP / SSE | ✅ |
 | `codepilot-worker` | 同上（换 command） | 无 | 消费队列、跑图、调沙箱 | ✅ |
 | `codepilot/sandbox:py311` | 自建 | 一次性 | 跑 LLM 生成的单测（`--network none`） | 用单测功能时 |
