@@ -21,6 +21,8 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=appuser:appuser backend ./backend
 COPY --chown=appuser:appuser scripts ./scripts
+# 前端构建产物（改前端后先在 frontend/ 里 npm run build）
+COPY --chown=appuser:appuser frontend/dist ./frontend/dist
 COPY --chown=appuser:appuser pyproject.toml ./
 
 USER appuser

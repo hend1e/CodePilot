@@ -33,6 +33,7 @@ logs/
 .vscode/
 .DS_Store
 
-# ===== 前端（预留）=====
+# ===== 前端 =====
 node_modules/
-dist/
+# dist 需要提交：FastAPI 直接托管，别人 clone 后无需装 Node
+!frontend/dist/

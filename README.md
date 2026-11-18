@@ -30,6 +30,29 @@ CodePilot 用三个 Agent 把这条链路串起来，**主干是确定的有向�
 
 ---
 
+## 界面
+
+| 审查工作台 | 代码问答 |
+|---|---|
+| ![review](docs/screenshots/review.png) | ![chat](docs/screenshots/chat.png) |
+
+打开 `http://localhost:8000/` 即是前端（Vue 3 + Vite 构建，FastAPI 同源托管，不需要额外的 nginx 容器）。
+三个页签：**审查工作台**（提交 diff / 轮询状态 / 按严重度与维度过滤 / HitL 确认）、
+**代码问答**（SSE 流式 + 引用可点）、**任务记录**（历史任务与报告回看）。
+
+改前端：
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173，/api 自动代理到 8000
+npm run build      # 产物在 frontend/dist，FastAPI 直接托管
+```
+
+`frontend/dist` 已提交，clone 下来不需要装 Node 就能跑。
+
+---
+
 ## 快速开始（5 分钟）
 
 ```bash
@@ -128,6 +151,7 @@ Manual / Chat ────────┤
 | GET | `/api/v1/rag/repos` | 已索引仓库与 chunk 数 |
 | POST | `/api/v1/chat` | 统一入口（SSE：route/citations/token/result/done） |
 | GET | `/healthz` `/readyz` `/metrics` | 健康检查与指标 |
+| GET | `/` | 前端工作台（Vue SPA） |
 
 ```bash
 # 示例：登录 + 提交 diff
@@ -156,6 +180,7 @@ backend/
   infra/       queue(Streams/内存) · worker · sandbox(Docker断网) · github(webhook/评论) · guard(限流)
   api/v1/      auth · reviews · webhooks · rag_api · chat(SSE) · health
 services/      review_service(建任务/跑图/恢复) · metrics
+frontend/      Vue 3 + Vite（审查工作台 / 代码问答 / 任务记录），dist 随仓库提交
 scripts/       init_db.sql · seed_data · ingest_repo · demo_review · eval_review
 tests/         纯函数单测（diff/rules/reducer/chunking/router/security/sandbox）
 docs/          ARCHITECTURE · MAPPING(EduAgent→CodePilot) · DEPLOY
@@ -198,7 +223,7 @@ python -m scripts.eval_review --cases eval/cases.json
 - [ ] GitLab 适配器（`repos.provider` 已留枚举，暂无实现）
 - [ ] 多租户 RLS（当前靠查询条件隔离）
 - [ ] 沙箱独立服务化（当前 worker 调宿主机 Docker）
-- [ ] 前端工作台（现在只有 `/docs` 与 SSE）
+- [ ] 前端：Markdown 完整渲染、diff 高亮、任务详情分享链接
 - [ ] Contextual RAG（chunk 摘要增强）
 - [ ] 评测集扩充 + LLM 维度自动化回归
 

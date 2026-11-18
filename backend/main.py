@@ -4,10 +4,12 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.v1 import auth, chat, health, rag_api, reviews, webhooks
 from backend.config import get_settings
@@ -103,3 +105,27 @@ async def handle_unexpected(request: Request, exc: Exception):
     logger.error("api.unhandled", path=request.url.path, error=str(exc), exc_info=True)
     return JSONResponse(status_code=500, content={"error": {"code": "internal_error",
                                                            "message": "服务器内部错误"}})
+
+
+# ── 前端 SPA（Vite 构建产物，同源托管，无需额外 nginx 容器）──
+# 改前端后：cd frontend && npm run build
+_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if _DIST.is_dir():
+    if (_DIST / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    async def spa_index():
+        return FileResponse(_DIST / "index.html")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def spa_fallback(path: str):
+        """SPA 兜底：真实文件直接返回，其余交给前端路由；API 路径保持 404 JSON。"""
+        if path.startswith(("api/", "docs", "redoc", "openapi.json",
+                            "healthz", "readyz", "metrics")):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        target = (_DIST / path).resolve()
+        if _DIST.resolve() in target.parents and target.is_file():
+            return FileResponse(target)
+        return FileResponse(_DIST / "index.html")

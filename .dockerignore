@@ -16,4 +16,9 @@ models
 *.log
 eval
 docs
+frontend/node_modules
+frontend/src
+frontend/index.html
+frontend/package*.json
+frontend/vite.config.js
 README.md
