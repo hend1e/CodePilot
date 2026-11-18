@@ -151,6 +151,7 @@ async def ingest_repo(repo_id: str, root_path: str, *, reset: bool = True) -> di
     chunks_total = 0
     docs_total = 0
     milvus_ok = True
+    inserted_vectors = 0
     batch: list[tuple[CodeChunk, str]] = []
     pending_rows: list[dict] = []
 
@@ -224,19 +225,23 @@ async def ingest_repo(repo_id: str, root_path: str, *, reset: bool = True) -> di
                 pending_rows.extend(await _embed_batch(embedder, batch, repo_id))
                 batch.clear()
             if pending_rows and len(pending_rows) >= 128:
-                milvus_ok = await _safe_upsert(store, pending_rows) and milvus_ok
+                ok = await _safe_upsert(store, pending_rows)
+                milvus_ok = ok and milvus_ok
+                inserted_vectors += len(pending_rows) if ok else 0
                 pending_rows.clear()
 
         if batch:
             pending_rows.extend(await _embed_batch(embedder, batch, repo_id))
         if pending_rows:
-            milvus_ok = await _safe_upsert(store, pending_rows) and milvus_ok
+            ok = await _safe_upsert(store, pending_rows)
+            milvus_ok = ok and milvus_ok
+            inserted_vectors += len(pending_rows) if ok else 0
         await session.commit()
 
     logger.info("rag.ingested", repo_id=repo_id, files=docs_total, chunks=chunks_total,
-                vectors=len(pending_rows) if milvus_ok else 0, milvus=milvus_ok)
+                vectors=inserted_vectors, milvus=milvus_ok)
     return {"repo_id": repo_id, "files": docs_total, "chunks": chunks_total,
-            "vectors": len(pending_rows) if milvus_ok else 0,
+            "vectors": inserted_vectors,
             "milvus": milvus_ok, "degraded": not milvus_ok,
             "embedding_backend": _settings.embedding_backend}
 
