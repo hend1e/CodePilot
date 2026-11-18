@@ -16,9 +16,9 @@ def test_rule_route_pr_url():
     assert r.intent == "review" and r.repo == "acme/pay" and r.pr_number == 128
 
 
-def test_rule_route_stacktrace():
-    assert rule_route('Traceback (most recent call last):\n  File "a.py", line 3, in <module>').intent == "defect"
-    assert rule_route("线上接口 500 报错，帮我定位").intent == "defect"
+def test_rule_route_stacktrace_falls_through():
+    """堆栈不归属任何子图（本项目没有缺陷定位 Agent），交给 LLM/默认问答。"""
+    assert rule_route('Traceback (most recent call last):\n  File "a.py", line 3, in <module>') is None
 
 
 def test_rule_route_test_and_qa():

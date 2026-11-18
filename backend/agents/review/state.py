@@ -89,7 +89,6 @@ class ReviewState(TypedDict, total=False):
     repo: dict                 # {id, full_name, local_path, provider}
     pr: dict                   # {number, title, base_sha, head_sha, html_url, author}
     diff_text: str             # 原始 unified diff
-    stack_trace: str           # 缺陷定位输入
     diff: dict                 # DiffBundle 的 dict 形态（便于落库/调试）
     requested_dimensions: list[str]
 
@@ -108,7 +107,6 @@ class ReviewState(TypedDict, total=False):
     testgen_rounds: int
     sandbox_report: dict | None
     hitl: dict | None
-    want_defect: bool
 
     # ── 预算与防死循环 ──
     budget: dict

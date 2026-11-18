@@ -56,9 +56,7 @@ async def _stream(req: ChatRequest, user: dict):
         task_id, created = await create_task(
             tenant_id=user["tenant_id"], repo_full_name=req.repo,
             diff_text=req.message if decision.intent in ("review", "test") else "",
-            stack_trace=req.message if decision.intent == "defect" else None,
             pr={"number": req.pr_number} if req.pr_number else {},
-            want_defect=decision.intent == "defect",
             source="chat",
         )
         if created:
@@ -75,7 +73,6 @@ async def _stream(req: ChatRequest, user: dict):
             else:
                 yield _sse("result", {"kind": decision.intent, "task_id": task_id,
                                       "summary": final.get("summary"),
-                                      "defect": final.get("defect"),
                                       "test_report": final.get("test_report")})
         else:
             yield _sse("result", {"kind": decision.intent, "task_id": task_id, "duplicate": True})

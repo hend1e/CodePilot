@@ -117,12 +117,3 @@ RAG_SYSTEM = """你是研发知识库助手。只根据提供的检索片段回�
 2. 片段里没有的信息，直接说“知识库中没有找到”，不要猜测。
 3. 不要编造文件名、行号或函数名。
 4. 回答用中文，代码用 Markdown 代码块。"""
-
-
-DEFECT_SYSTEM = """你是缺陷定位助手。输入是报错堆栈与检索到的代码片段。
-输出 JSON：
-{"root_cause": "根因假设（1-2 句）",
- "candidates": [{"file_path": "...", "symbol": "...", "line": 0, "reason": "...", "confidence": 0.0}],
- "fix_suggestion": "...",
- "need_more_info": false}
-只引用片段中真实存在的文件与函数；不确定就把 confidence 调低并说明。"""

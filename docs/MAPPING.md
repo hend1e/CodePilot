@@ -10,9 +10,11 @@
 | ① PR 审查 Agent | 并行评审（第 4 章） | 四维 Send 并行 + 规则引擎 + 证据校验 + 分级聚合 | `backend/agents/review/` |
 | ② 代码库 RAG Agent | RAG（第 5 章） | 函数级切分 + 混合召回 + RRF + 精排 + 引用校验 | `backend/agents/rag/` |
 | ③ 测试生成 Agent | 沙箱 + HitL（第 6 章） | 生成 → 沙箱真跑 → 失败回灌 ≤2 轮 → interrupt 人工确认 | `backend/agents/testgen/`、`backend/infra/sandbox.py` |
-| ④ 缺陷定位 Agent | RAG + 推理 | 栈帧解析 + 检索 + 排序 + 低置信 abstain | `backend/agents/defect/` |
 | 意图路由 | 路由分发（8.4） | 规则前置 + LLM 分类 → 主图分支 | `backend/agents/orchestrator/` |
 | 统一入口 SSE | 8.5 | 事件流 route/citations/token/stage/result/done | `backend/api/v1/chat.py` |
+
+> 课件里的「④ 缺陷定位 Agent」本项目**没有实现**：简历上没有这条，就不放进来充数。
+> 原因也说得通——缺陷定位本质是「栈帧 + 检索 + 排序」，和 RAG 子图高度重合，单独拆一个 Agent 收益不大。
 
 ## 二、EduAgent 的地基怎么复用
 
@@ -32,11 +34,11 @@
 ## 三、简历每条 → 代码证据
 
 ### 1. 多 Agent 编排
-> 「LangGraph『主图 + 4 子图』+ Send 并行扇出 + 条件边路由 + checkpoint/interrupt 断点恢复…结构化信封协议、单写者约束、预算限制与无进展检测」
+> 「LangGraph『主图 + 3 子图』+ Send 并行扇出 + 条件边路由 + checkpoint/interrupt 断点恢复…结构化信封协议、单写者约束、预算限制」
 
 | 简历说法 | 代码 | 怎么演示 |
 |---|---|---|
-| 主图 + 4 子图 | `orchestrator/graph.py`（route → review/qa/test/defect） | `POST /api/v1/chat` 发不同消息看 `route` 事件 |
+| 主图 + 3 子图 | `orchestrator/graph.py`（route → review/qa/test） | `POST /api/v1/chat` 发不同消息看 `route` 事件 |
 | Send 并行扇出 | `review/nodes.py::fanout_dimensions` | 日志里 4 个维度几乎同时开始 |
 | 条件边路由 | `route_after_aggregate` / `route_after_sandbox` | 有/无新增函数走不同分支 |
 | checkpoint + interrupt | `review/nodes.py::human_gate`、`db/session.py` | `status=waiting_human` → `/resume` 继续 |

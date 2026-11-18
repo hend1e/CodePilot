@@ -15,13 +15,11 @@ router = APIRouter()
 
 class CreateReviewRequest(BaseModel):
     repo: str = Field(..., description="仓库标识，如 owner/repo 或本地目录名")
-    diff: str = Field("", description="unified diff 文本（与 pr_url / stack_trace 至少给一个）")
+    diff: str = Field("", description="unified diff 文本（与 pr_url 至少给一个）")
     pr_number: int | None = None
     pr_title: str = ""
     local_path: str | None = Field(None, description="本地仓库路径（沙箱执行与索引用，必须在白名单内）")
     provider: str = "local"
-    stack_trace: str | None = None
-    want_defect: bool = False
     source: str = "manual"
 
 
@@ -40,7 +38,6 @@ async def create_review(req: CreateReviewRequest, user: dict = Depends(get_curre
     task_id, created = await create_task(
         tenant_id=user["tenant_id"], repo_full_name=req.repo, diff_text=req.diff, pr=pr,
         local_path=local_path, provider=req.provider, source=req.source,
-        stack_trace=req.stack_trace, want_defect=req.want_defect,
         idempotency_key=(f"{req.repo}#{req.pr_number}" if req.pr_number and req.diff else None),
     )
     if created:

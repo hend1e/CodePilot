@@ -23,11 +23,10 @@ QUERY_REWRITE_SYSTEM = """你是代码检索查询改写器。把用户问题改
 只输出 JSON：{"queries": ["...", "...", "..."]}"""
 
 INTENT_SYSTEM = """判断用户请求属于哪类研发任务，只输出 JSON：
-{"intent": "review|qa|test|defect", "repo": "owner/repo 或空", "reason": "一句话"}
+{"intent": "review|qa|test", "repo": "owner/repo 或空", "reason": "一句话"}
 - review：审查 PR/diff/代码改动
 - qa：问代码库实现、规范、用法
-- test：为某段代码生成单测
-- defect：给报错/堆栈定位缺陷"""
+- test：为某段代码生成单测"""
 
 
 def build_context(chunks: list[dict], max_chars: int = 12_000) -> str:

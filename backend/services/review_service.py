@@ -66,12 +66,10 @@ async def create_task(
     idempotency_key: str | None = None,
     source: str = "manual",
     kind: str = "pr_review",
-    stack_trace: str | None = None,
-    want_defect: bool = False,
 ) -> tuple[str, bool]:
     """返回 (task_id, created)。幂等键重复时返回已有任务。"""
-    if not diff_text.strip() and not stack_trace:
-        raise InvalidInput("diff 与 stack_trace 不能同时为空")
+    if not diff_text.strip():
+        raise InvalidInput("diff 不能为空")
 
     repo = await ensure_repo(tenant_id, repo_full_name, provider=provider,
                              local_path=local_path, clone_url=clone_url)
@@ -97,8 +95,7 @@ async def create_task(
             )
 
         task_id = str(uuid.uuid4())
-        payload = {"repo": repo, "pr": pr or {}, "diff_text": diff_text,
-                   "stack_trace": stack_trace, "want_defect": want_defect}
+        payload = {"repo": repo, "pr": pr or {}, "diff_text": diff_text}
         await session.execute(
             text("""
                 INSERT INTO review_tasks (id, tenant_id, repo_id, thread_id, kind, status,
@@ -137,8 +134,6 @@ async def run_review_task(task_id: str) -> dict:
         "repo": payload.get("repo", {}),
         "pr": pr,
         "diff_text": payload.get("diff_text", ""),
-        "stack_trace": payload.get("stack_trace", "") or "",
-        "want_defect": payload.get("want_defect", False),
         "findings": [],
         "dim_status": {},
         "usage": [],

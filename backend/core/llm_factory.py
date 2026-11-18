@@ -28,7 +28,6 @@ _AGENT_MODEL_ROUTING: dict[str, str] = {
     "rag_answer": "chat",
     "rag_hyde": "chat",
     "testgen": "code",
-    "defect": "code",
     "router": "chat",
     "summarize": "chat",
 }

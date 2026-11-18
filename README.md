@@ -1,7 +1,7 @@
 # CodePilot · 多 Agent 研发协作与代码审查平台
 
 <p align="center">
-  <b>PR 四维并行审查 · 代码库 RAG 问答 · 单测生成 + Docker 沙箱 · 缺陷定位</b><br/>
+  <b>PR 四维并行审查 · 代码库 RAG 问答 · 单测生成 + Docker 沙箱</b><br/>
   FastAPI · LangGraph · PostgreSQL · Redis · Milvus · Docker
 </p>
 
@@ -19,7 +19,7 @@
 2. **新人不懂内部规范** —— 代码库、架构文档、历史 PR 里的知识检索不到；
 3. **单测覆盖不足** —— 写了跑不通，跑通了没人看，最后没人写。
 
-CodePilot 用四个 Agent 把这条链路串起来，**主干是确定的有向图，Agent 只在节点内部有自主权**：
+CodePilot 用三个 Agent 把这条链路串起来，**主干是确定的有向图，Agent 只在节点内部有自主权**：
 不追求「全自主」，但每一步都可解释、可降级、可人工兜底。
 
 | 能力 | 入口 | 关键实现 |
@@ -27,7 +27,6 @@ CodePilot 用四个 Agent 把这条链路串起来，**主干是确定的有向�
 | PR 四维并行审查 | Webhook / API / Chat | LangGraph `Send` 扇出 + 规则引擎 + 证据校验 + 阻断门 |
 | 代码库 RAG 问答 | API / Chat（SSE） | 函数级切分 + dense/sparse 混合召回 + RRF + 精排 + 引用校验 |
 | 单测生成与验证 | API / Chat | diff 识别新增函数 → LLM 生成 → 沙箱 `pytest --cov` → `interrupt` 人工确认 |
-| 缺陷定位 | API / Chat | 栈帧解析 + 代码库检索 + 置信度排序 |
 
 ---
 
@@ -96,8 +95,8 @@ Manual / Chat ────────┤
                                                     │
                                     ┌───────────────▼────────────────┐
                                     │ LangGraph Orchestrator（主图）  │
-                                    │ route → review / qa / test /   │
-                                    │          defect（4 子图）       │
+                                    │ route → review / qa / test     │
+                                    │          （3 子图）             │
                                     └───────────────┬────────────────┘
         ┌───────────────────────────────────────────┼──────────────────────────────┐
         ▼                                           ▼                              ▼
@@ -153,7 +152,6 @@ backend/
     review/    state(reducer) · diff · rules(15条) · reviewers · nodes · graph · prompts · persist
     rag/       chunking(tree-sitter/正则) · embedding(hash/local/openai) · store(Milvus+PG) · retrieval(RRF+rerank) · graph
     testgen/   graph(生成→沙箱→回灌→interrupt)
-    defect/    graph(栈帧→检索→排序)
     orchestrator/ router(规则+LLM) · graph(主图+4子图)
   infra/       queue(Streams/内存) · worker · sandbox(Docker断网) · github(webhook/评论) · guard(限流)
   api/v1/      auth · reviews · webhooks · rag_api · chat(SSE) · health

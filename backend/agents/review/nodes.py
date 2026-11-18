@@ -17,7 +17,7 @@ from backend.agents.rag.retrieval import retrieve_context
 from backend.agents.review.diff import DiffBundle, is_test_path, parse_diff
 from backend.agents.review.persist import mark_status, save_final, save_findings, save_test_run
 from backend.agents.review.prompts import (
-    DEFECT_SYSTEM, TESTGEN_SYSTEM, TRIAGE_SYSTEM, build_testgen_prompt,
+    TESTGEN_SYSTEM, TRIAGE_SYSTEM, build_testgen_prompt,
 )
 from backend.agents.review.reviewers import build_reviewer
 from backend.agents.review.rules import validate_evidence
@@ -255,8 +255,6 @@ async def aggregate(state: ReviewState) -> dict:
 
 # ── 路由函数 ──────────────────────────────────────────────────
 def route_after_aggregate(state: ReviewState) -> str:
-    if state.get("want_defect"):
-        return "defect_locate"
     symbols = _bundle(state).added_python_symbols()
     if symbols and settings.sandbox_mode != "off" and settings.llm_enabled:
         return "testgen"
@@ -354,78 +352,6 @@ async def human_gate(state: ReviewState) -> dict:
     decision = interrupt(payload)         # 图在此挂起，等待 /resume
     await mark_status(state["task_id"], "running")
     return {"hitl": decision, "steps": state.get("steps", 0) + 1}
-
-
-# ── 缺陷定位 ──────────────────────────────────────────────────
-_FRAME_RE = re.compile(r'File\s+"([^"]+)",\s+line\s+(\d+),\s+in\s+([\w<>._]+)')
-
-
-def parse_stack_trace(trace: str) -> list[dict]:
-    frames = [
-        {"file_path": m.group(1), "line": int(m.group(2)), "symbol": m.group(3)}
-        for m in _FRAME_RE.finditer(trace)
-    ]
-    return frames[-12:]
-
-
-async def defect_locate(state: ReviewState) -> dict:
-    trace = state.get("stack_trace") or state.get("diff_text") or ""
-    frames = parse_stack_trace(trace)
-    if not frames:
-        return {"final": {**(state.get("final") or {}), "defect": {
-            "root_cause": "未能从输入中解析出堆栈帧", "candidates": [], "confidence": 0.0}},
-            "steps": state.get("steps", 0) + 1}
-
-    query = " ".join(f"{f['file_path']} {f['symbol']}" for f in frames)
-    try:
-        ctx = await retrieve_context(query, state.get("repo", {}).get("id"),
-                                     state.get("tenant_id", settings.default_tenant_id),
-                                     top_k=settings.rerank_top_k)
-        chunks = ctx.get("chunks", [])
-    except Exception:       # noqa: BLE001
-        chunks = []
-
-    candidates = []
-    for f in reversed(frames):      # 栈底更接近根因
-        hit = next((c for c in chunks if f["file_path"].endswith(c["path"])), None)
-        candidates.append({
-            "file_path": hit["path"] if hit else f["file_path"],
-            "symbol": f["symbol"], "line": f["line"],
-            "reason": "报错栈帧" + ("，且命中代码库检索" if hit else ""),
-            "confidence": round(0.55 + (0.2 if hit else 0), 2),
-        })
-
-    defect = {"root_cause": f"最可能的根因位于 {candidates[0]['file_path']}:{candidates[0]['line']}",
-              "candidates": candidates[:5], "confidence": candidates[0]["confidence"]}
-
-    if settings.llm_enabled and chunks:
-        llm = get_structured_llm("defect", _DefectOut)
-        if llm is not None:
-            try:
-                async with asyncio.timeout(45):
-                    out = await llm.ainvoke([
-                        SystemMessage(content=DEFECT_SYSTEM),
-                        HumanMessage(content=json.dumps({
-                            "stack": trace[-6000:],
-                            "chunks": [{"path": c["path"], "symbol": c.get("symbol"),
-                                        "content": c["content"][:800]} for c in chunks[:6]],
-                        }, ensure_ascii=False)),
-                    ])
-                defect = {**out.model_dump(), "candidates": out.candidates or candidates}
-                if not defect["candidates"]:
-                    defect["candidates"] = candidates
-            except Exception as e:      # noqa: BLE001
-                logger.warning("defect.degraded", error=str(e))
-
-    return {"final": {**(state.get("final") or {}), "defect": defect},
-            "steps": state.get("steps", 0) + 1}
-
-
-class _DefectOut(BaseModel):
-    root_cause: str = ""
-    candidates: list[dict] = []
-    fix_suggestion: str = ""
-    need_more_info: bool = False
 
 
 # ── publish：落库 + 回写评论 ───────────────────────────────────

@@ -18,10 +18,8 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 PR_URL_RE = re.compile(r"https?://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)")
-STACK_RE = re.compile(r'(Traceback \(most recent call last\)|File "[^"]+", line \d+)')
 REVIEW_WORDS = ("审查", "评审", "review", "看看这个 pr", "看下这个 pr", "diff", "改动")
 TEST_WORDS = ("生成单测", "写测试", "补测试", "test case", "单元测试")
-DEFECT_WORDS = ("报错", "异常", "堆栈", "traceback", "崩溃", "bug 定位", "定位缺陷", "超时")
 
 
 class IntentResult:
@@ -41,8 +39,6 @@ def rule_route(message: str) -> IntentResult | None:
     m = PR_URL_RE.search(text)
     if m:
         return IntentResult("review", m.group("repo"), "PR 链接", 0.99, "rule", int(m.group("num")))
-    if STACK_RE.search(text) or any(w in text.lower() for w in DEFECT_WORDS):
-        return IntentResult("defect", None, "命中堆栈/报错特征", 0.85, "rule")
     if any(w in text.lower() for w in TEST_WORDS):
         return IntentResult("test", None, "命中单测生成关键词", 0.8, "rule")
     if any(w in text.lower() for w in REVIEW_WORDS) and "```" in text:
@@ -72,7 +68,7 @@ async def classify(message: str) -> IntentResult:
                 SystemMessage(content=INTENT_SYSTEM),
                 HumanMessage(content=message[:4000]),
             ])
-        intent = out.intent if out.intent in ("review", "qa", "test", "defect") else "qa"
+        intent = out.intent if out.intent in ("review", "qa", "test") else "qa"
         return IntentResult(intent, out.repo or None, out.reason or "LLM 分类", 0.8, "llm")
     except Exception as e:      # noqa: BLE001
         logger.warning("router.degraded", error=str(e)[:200])

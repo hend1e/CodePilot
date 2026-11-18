@@ -13,7 +13,6 @@ flowchart TD
     O -->|intent=review| R[PR 审查子图]
     O -->|intent=qa| A[RAG 子图]
     O -->|intent=test| T[单测生成子图]
-    O -->|intent=defect| D[缺陷定位子图]
 
     R -->|Send 四路并行| D1[security]
     R --> D2[performance]
@@ -26,7 +25,6 @@ flowchart TD
     SB -->|失败| T
     AGG --> PUB[publish]
     HITL --> PUB
-    D --> PUB
 
     A --> PG[(PostgreSQL)]
     A --> MV[(Milvus)]

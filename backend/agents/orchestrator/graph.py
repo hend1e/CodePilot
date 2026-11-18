@@ -8,7 +8,6 @@ from typing import Annotated, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from backend.agents.defect.graph import build_defect_graph
 from backend.agents.orchestrator.router import classify
 from backend.agents.rag.graph import ask as rag_ask
 from backend.agents.review.state import summarize
@@ -18,7 +17,7 @@ from backend.services.review_service import run_review_task
 
 logger = get_logger(__name__)
 
-INTENTS = ["review", "qa", "test", "defect"]
+INTENTS = ["review", "qa", "test"]
 
 
 class OrchestratorState(TypedDict, total=False):
@@ -29,7 +28,6 @@ class OrchestratorState(TypedDict, total=False):
     repo: dict
     pr: dict
     diff_text: str
-    stack_trace: str
     intent: str
     route_reason: str
     result: dict
@@ -81,24 +79,12 @@ async def test_branch(state: OrchestratorState) -> dict:
                         "sandbox": (out.get("sandbox_report") or {}).get("status")}]}
 
 
-async def defect_branch(state: OrchestratorState) -> dict:
-    graph = build_defect_graph()
-    out = await graph.ainvoke({
-        "task_id": state.get("task_id"), "tenant_id": state.get("tenant_id"),
-        "repo": state.get("repo", {}), "stack_trace": state.get("stack_trace")
-        or state["message"], "steps": 0,
-    })
-    return {"result": {"kind": "defect", **(out.get("final") or {})},
-            "events": [{"stage": "defect_done"}]}
-
-
 def build_orchestrator_graph():
     builder = StateGraph(OrchestratorState)
     builder.add_node("route", route)
     builder.add_node("review", review_branch)
     builder.add_node("qa", rag_branch)
     builder.add_node("test", test_branch)
-    builder.add_node("defect", defect_branch)
 
     builder.add_edge(START, "route")
     builder.add_conditional_edges("route", lambda s: s.get("intent", "qa"), INTENTS)

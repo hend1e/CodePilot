@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS review_tasks (
     pr_id           UUID REFERENCES pull_requests(id) ON DELETE SET NULL,
     thread_id       VARCHAR(128) NOT NULL UNIQUE,     -- LangGraph checkpointer 线程
     kind            VARCHAR(16)  NOT NULL DEFAULT 'pr_review'
-                    CHECK (kind IN ('pr_review', 'defect_locate', 'test_gen')),
+                    CHECK (kind IN ('pr_review', 'test_gen')),
     status          VARCHAR(20)  NOT NULL DEFAULT 'queued'
                     CHECK (status IN ('queued', 'running', 'waiting_human',
                                       'done', 'failed', 'cancelled', 'superseded')),
@@ -139,17 +139,6 @@ CREATE TABLE IF NOT EXISTS hitl_decisions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_hitl_task ON hitl_decisions (task_id);
-
--- ── 缺陷定位结果 ──
-CREATE TABLE IF NOT EXISTS defect_reports (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    task_id         UUID REFERENCES review_tasks(id) ON DELETE CASCADE,
-    stack_trace     TEXT NOT NULL,
-    candidates      JSONB NOT NULL DEFAULT '[]',
-    confidence      REAL NOT NULL DEFAULT 0,
-    suggestion      TEXT NOT NULL DEFAULT '',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
 -- ── 代码库索引：文档 / 函数级 chunk ──
 CREATE TABLE IF NOT EXISTS code_documents (
