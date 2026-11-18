@@ -84,6 +84,38 @@ make demo
 
 ---
 
+## 模型配置（一个 provider，多个槽位）
+
+`.env.local` 里 LLM 只有 **1 个 provider**（DeepSeek / 任意 OpenAI 兼容网关 / mock），
+但模型名分 **2 个基础槽 + 5 个可选覆盖槽**，不配覆盖就自动回落：
+
+| 槽位 | 环境变量 | 默认回落 | 谁在用 |
+|---|---|---|---|
+| chat | `LLM_MODEL_CHAT` | `deepseek-chat` | 分诊、RAG 回答、查询改写、意图路由、摘要 |
+| code | `LLM_MODEL_CODE` | `deepseek-chat` | 四维审查、单测生成 |
+| review | `LLM_MODEL_REVIEW` | code 槽 | 安全/性能/规范/测试四个 reviewer |
+| testgen | `LLM_MODEL_TESTGEN` | code 槽 | 单测生成 |
+| triage | `LLM_MODEL_TRIAGE` | chat 槽 | PR 分诊（7B 小模型就够） |
+| rag | `LLM_MODEL_RAG` | chat 槽 | 问答与 HyDE 改写 |
+| router | `LLM_MODEL_ROUTER` | chat 槽 | 统一入口意图分类 |
+
+```ini
+# 例：审查用强模型，其余用便宜模型
+LLM_MODEL_REVIEW=deepseek-reasoner
+LLM_MODEL_CHAT=deepseek-chat
+# 换模型后同步改单价，否则成本数字不准（USD / 1M tokens）
+LLM_PRICE_INPUT_PER_M=0.55
+LLM_PRICE_OUTPUT_PER_M=2.19
+```
+
+解析结果可以直接查：`curl -s localhost:8000/healthz | jq .models`。
+
+另外还有两组**非 LLM** 模型配置，别混在一起：
+- `EMBEDDING_BACKEND` / `EMBEDDING_MODEL` / `EMBEDDING_DIM`：向量化（hash / 本地 BGE-M3 / OpenAI 兼容）
+- `RERANK_BACKEND` / `RERANK_MODEL`：精排（none / lexical / cross-encoder）
+
+---
+
 ## 启动哪些容器
 
 | 容器 | 镜像 | 端口 | 作用 |

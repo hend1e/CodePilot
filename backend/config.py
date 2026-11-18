@@ -64,6 +64,17 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.deepseek.com/v1"
     llm_model_chat: str = "deepseek-chat"
     llm_model_code: str = "deepseek-chat"
+
+    # 可选：按 Agent 覆盖模型（留空 = 回落到 chat/code，不配也能跑）
+    llm_model_review: str = ""      # 四维审查（默认回落到 code）
+    llm_model_testgen: str = ""     # 单测生成（默认回落到 code）
+    llm_model_triage: str = ""      # PR 分诊（默认回落到 chat）
+    llm_model_rag: str = ""         # 问答 / 查询改写（默认回落到 chat）
+    llm_model_router: str = ""      # 意图路由（默认回落到 chat）
+
+    # 计价（USD / 1M tokens），只用于预算估算；换模型记得改
+    llm_price_input_per_m: float = 0.27
+    llm_price_output_per_m: float = 1.10
     llm_timeout_seconds: float = 120.0
 
     # ── Embedding ──
@@ -125,6 +136,19 @@ class Settings(BaseSettings):
         return self.llm_provider.lower() != "mock" and bool(self.llm_api_key)
 
     @property
+    def llm_model_map(self) -> dict[str, str]:
+        """解析后的实际模型名（按 Agent 槽 → 回落），供 /healthz 与日志展示。"""
+        return {
+            "chat": self.llm_model_chat,
+            "code": self.llm_model_code,
+            "review": self.llm_model_review or self.llm_model_code,
+            "testgen": self.llm_model_testgen or self.llm_model_code,
+            "triage": self.llm_model_triage or self.llm_model_chat,
+            "rag": self.llm_model_rag or self.llm_model_chat,
+            "router": self.llm_model_router or self.llm_model_chat,
+        }
+
+    @property
     def dim_timeouts(self) -> dict[str, float]:
         return {
             "security": self.review_dim_timeout_security,
@@ -132,6 +156,13 @@ class Settings(BaseSettings):
             "style": self.review_dim_timeout_style,
             "test": self.review_dim_timeout_test,
         }
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _normalize_provider(cls, v: str) -> str:
+        """LLM_PROVIDER= 留空等价于 mock：不调模型，只跑规则引擎。"""
+        v = (v or "").strip().lower()
+        return v or "mock"
 
     @field_validator("app_env")
     @classmethod

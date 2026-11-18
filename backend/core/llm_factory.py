@@ -18,22 +18,43 @@ _HTTP_ASYNC = httpx.AsyncClient(
 )
 _HTTP_SYNC = httpx.Client(trust_env=False, timeout=httpx.Timeout(120.0, connect=15.0))
 
-# Agent 类型 → 用「聊天模型」还是「代码模型」
-_AGENT_MODEL_ROUTING: dict[str, str] = {
-    "review_security": "code",
-    "review_performance": "code",
-    "review_style": "code",
-    "review_test": "code",
-    "triage": "chat",
-    "rag_answer": "chat",
-    "rag_hyde": "chat",
-    "testgen": "code",
-    "router": "chat",
+# Agent 类型 → 配置槽位。槽位留空时回落到 chat / code，所以只配两个模型也能跑。
+_AGENT_SLOT: dict[str, str] = {
+    "review_security": "review",
+    "review_performance": "review",
+    "review_style": "review",
+    "review_test": "review",
+    "testgen": "testgen",
+    "triage": "triage",
+    "rag_answer": "rag",
+    "rag_hyde": "rag",
+    "router": "router",
     "summarize": "chat",
 }
 
-# DeepSeek 官方计价（USD / 1M tokens，缓存未命中），用于预算估算
-_PRICING = {"deepseek-chat": (0.27, 1.10)}
+# 槽位 → 兜底槽位（code 类任务优先用代码模型）
+_SLOT_FALLBACK: dict[str, str] = {
+    "review": "code",
+    "testgen": "code",
+    "triage": "chat",
+    "rag": "chat",
+    "router": "chat",
+    "chat": "chat",
+}
+
+
+def resolve_model(agent_type: str) -> str:
+    """解析某个 Agent 实际使用的模型名（按需覆盖，未配置则回落）。"""
+    if agent_type not in _AGENT_SLOT:
+        raise LLMError(f"未知 agent_type: {agent_type}",
+                       details={"available": list(_AGENT_SLOT)})
+    s = get_settings()
+    slot = _AGENT_SLOT[agent_type]
+    explicit = getattr(s, f"llm_model_{slot}", "") or ""
+    if explicit:
+        return explicit
+    fallback = _SLOT_FALLBACK.get(slot, "chat")
+    return s.llm_model_code if fallback == "code" else s.llm_model_chat
 
 
 class LLMFactory:
@@ -42,7 +63,6 @@ class LLMFactory:
     @classmethod
     def _build_kwargs(cls, model: str, temperature: float, streaming: bool) -> dict:
         s = get_settings()
-        provider = s.llm_provider.lower()
         return {
             "model": model,
             "model_provider": "openai",     # DeepSeek / 兼容网关统一走 OpenAI 协议
@@ -54,7 +74,6 @@ class LLMFactory:
             "http_async_client": _HTTP_ASYNC,
             "http_client": _HTTP_SYNC,
             "streaming": streaming,
-            "model_kwargs": {"provider": provider},
         }
 
     @classmethod
@@ -63,15 +82,12 @@ class LLMFactory:
         s = get_settings()
         if not s.llm_enabled:
             return None
-        if agent_type not in _AGENT_MODEL_ROUTING:
-            raise LLMError(f"未知 agent_type: {agent_type}",
-                           details={"available": list(_AGENT_MODEL_ROUTING)})
-
-        model = s.llm_model_code if _AGENT_MODEL_ROUTING[agent_type] == "code" else s.llm_model_chat
+        model = resolve_model(agent_type)
         key = f"{model}|{temperature}|{streaming}"
         if key not in cls._instances:
             cls._instances[key] = init_chat_model(**cls._build_kwargs(model, temperature, streaming))
-            logger.info("llm.model_initialized", agent_type=agent_type, model=model,
+            logger.info("llm.model_initialized", agent_type=agent_type,
+                        slot=_AGENT_SLOT[agent_type], model=model,
                         temperature=temperature, streaming=streaming)
         return cls._instances[key]
 
@@ -97,5 +113,7 @@ def get_structured_llm(agent_type: str, schema, temperature: float = 0.0) -> Run
 
 
 def estimate_cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> float:
-    pin, pout = _PRICING.get(model, (0.5, 1.5))
+    """价格优先用内置表，未收录的模型用 .env 里的 LLM_PRICE_*_PER_M。"""
+    s = get_settings()
+    pin, pout = _PRICING.get(model, (s.llm_price_input_per_m, s.llm_price_output_per_m))
     return round(prompt_tokens / 1e6 * pin + completion_tokens / 1e6 * pout, 6)

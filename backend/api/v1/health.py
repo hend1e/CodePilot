@@ -17,7 +17,8 @@ settings = get_settings()
 @router.get("/healthz")
 async def healthz():
     return {"status": "ok", "env": settings.app_env, "llm": settings.llm_provider,
-            "llm_enabled": settings.llm_enabled}
+            "llm_enabled": settings.llm_enabled,
+            "models": settings.llm_model_map}
 
 
 @router.get("/readyz")
