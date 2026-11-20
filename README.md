@@ -1,34 +1,26 @@
-# CodePilot · 多 Agent 研发协作与代码审查平台
+# CodePilot
 
-<p align="center">
-  <b>PR 四维并行审查 · 代码库 RAG 问答 · 单测生成 + Docker 沙箱</b><br/>
-  FastAPI · LangGraph · PostgreSQL · Redis · Milvus · Docker
-</p>
+**多 Agent 研发协作与代码审查平台** —— PR 四维并行审查 · 代码库 RAG 问答 · 单测生成与沙箱验证。
 
-> 一个能真正跑起来、能演示、能讲清楚的多 Agent 项目。
-> 从课程项目 EduAgent 的四种范式（并行 / RAG / HitL / 状态机）迁移到研发场景，
-> 迁移方法与逐条对照见 [docs/MAPPING.md](docs/MAPPING.md)。
+FastAPI · LangGraph · PostgreSQL · Redis · Milvus · Docker
 
 ---
 
-## 它解决什么问题
+## 项目简介
 
-研发团队的三个老问题：
+CodePilot 把大模型能力嵌入研发流程的三个高频环节：
 
-1. **PR 评审慢且标准不一** —— 安全、性能、规范、测试四个维度靠人肉看，漏报和重复告警都多；
-2. **新人不懂内部规范** —— 代码库、架构文档、历史 PR 里的知识检索不到；
-3. **单测覆盖不足** —— 写了跑不通，跑通了没人看，最后没人写。
+- **PR 评审**：安全、性能、规范、测试四个维度由规则引擎与 LLM 协同检查，结论带证据、可分级、可阻断合入；
+- **内部知识检索**：代码库与历史资产建成索引，支持带引用的自然语言问答与统一对话入口；
+- **单元测试**：从 diff 识别新增函数，生成测试并在受限容器里真实执行，覆盖率与失败结果回流到流程中。
 
-CodePilot 用三个 Agent 把这条链路串起来，**主干是确定的有向图，Agent 只在节点内部有自主权**：
-不追求「全自主」，但每一步都可解释、可降级、可人工兜底。
+平台的设计取向是 **主干确定、局部自主**：编排是一张有向图，超时、降级、预算、人工确认都是图上的显式节点或条件边；Agent 只在节点内部拥有自主权。因此每条结论都可追溯（文本证据 → diff 行）、可观测（状态、用量、降级原因）、可兜底（规则降级、人工介入）。
 
 | 能力 | 入口 | 关键实现 |
 |---|---|---|
-| PR 四维并行审查 | Webhook / API / Chat | LangGraph `Send` 扇出 + 规则引擎 + 证据校验 + 阻断门 |
-| 代码库 RAG 问答 | API / Chat（SSE） | 函数级切分 + dense/sparse 混合召回 + RRF + 精排 + 引用校验 |
-| 单测生成与验证 | API / Chat | diff 识别新增函数 → LLM 生成 → 沙箱 `pytest --cov` → `interrupt` 人工确认 |
-
----
+| PR 四维并行审查 | GitHub Webhook / REST / Chat | LangGraph `Send` 扇出 + 规则引擎 + 证据校验 + 分级阻断门 |
+| 代码库 RAG 问答 | REST / Chat（SSE） | 函数级切分 + dense/sparse 混合召回 + RRF + 精排 + 引用校验 |
+| 单测生成与验证 | REST / Chat | diff 识别新增符号 → LLM 生成 → 沙箱 `pytest --cov` → `interrupt` 人工确认 |
 
 ## 界面
 
@@ -36,111 +28,9 @@ CodePilot 用三个 Agent 把这条链路串起来，**主干是确定的有向�
 |---|---|
 | ![review](docs/screenshots/review.png) | ![chat](docs/screenshots/chat.png) |
 
-打开 `http://localhost:8000/` 即是前端（Vue 3 + Vite 构建，FastAPI 同源托管，不需要额外的 nginx 容器）。
-三个页签：**审查工作台**（提交 diff / 轮询状态 / 按严重度与维度过滤 / HitL 确认）、
-**代码问答**（SSE 流式 + 引用可点）、**任务记录**（历史任务与报告回看）。
+Vue 3 + Vite 构建的单页应用，由 FastAPI 同源托管，无需额外反向代理。三个页签：**审查工作台**（提交 diff、轮询状态、按严重度与维度过滤、HitL 确认）、**代码问答**（SSE 流式输出、引用可跳转）、**任务记录**（历史任务与报告回看）。构建产物 `frontend/dist` 随仓库提交，因此只运行后端也能获得完整界面。
 
-改前端：
-
-```bash
-cd frontend
-npm install
-npm run dev        # http://localhost:5173，/api 自动代理到 8000
-npm run build      # 产物在 frontend/dist，FastAPI 直接托管
-```
-
-`frontend/dist` 已提交，clone 下来不需要装 Node 就能跑。
-
----
-
-## 快速开始（5 分钟）
-
-```bash
-git clone <your-repo-url> codepilot && cd codepilot
-
-# 1. 配置
-cp .env.example .env.local
-#    至少填：LLM_API_KEY（DeepSeek / 任意 OpenAI 兼容）
-#    想完全离线演示：LLM_PROVIDER=mock（只跑确定性规则引擎）
-
-# 2. 基础设施（PostgreSQL + Redis + Milvus + Attu）
-docker compose up -d
-make sandbox-image            # 构建单测沙箱镜像
-
-# 3. 依赖 + 初始化
-python3.11 -m venv .venv && make install
-make seed                     # 演示账号 codepilot / codepilot123
-make api                      # http://localhost:8000/docs
-
-# 4. 跑一次端到端审查（另开终端）
-make demo
-```
-
-期望结果：一个含**硬编码密钥 / SQL 注入 / 循环内 IO / 吞异常 / eval / 缺鉴权**的 demo diff，
-返回 6~8 条 findings，其中 3 条 `block`，`mergeable=false`。
-
-> 没有 API Key 也能跑：`LLM_PROVIDER=mock` 时四维审查走 15 条确定性规则，
-> RAG 返回抽取式答案，单测链路跳过（不调用 LLM）。CI 就是这么跑的。
-
----
-
-## 模型配置（一个 provider，多个槽位）
-
-`.env.local` 里 LLM 只有 **1 个 provider**（DeepSeek / 任意 OpenAI 兼容网关 / mock），
-但模型名分 **2 个基础槽 + 5 个可选覆盖槽**，不配覆盖就自动回落：
-
-| 槽位 | 环境变量 | 默认回落 | 谁在用 |
-|---|---|---|---|
-| chat | `LLM_MODEL_CHAT` | `deepseek-chat` | 分诊、RAG 回答、查询改写、意图路由、摘要 |
-| code | `LLM_MODEL_CODE` | `deepseek-chat` | 四维审查、单测生成 |
-| review | `LLM_MODEL_REVIEW` | code 槽 | 安全/性能/规范/测试四个 reviewer |
-| testgen | `LLM_MODEL_TESTGEN` | code 槽 | 单测生成 |
-| triage | `LLM_MODEL_TRIAGE` | chat 槽 | PR 分诊（7B 小模型就够） |
-| rag | `LLM_MODEL_RAG` | chat 槽 | 问答与 HyDE 改写 |
-| router | `LLM_MODEL_ROUTER` | chat 槽 | 统一入口意图分类 |
-
-```ini
-# 例：审查用强模型，其余用便宜模型
-LLM_MODEL_REVIEW=deepseek-reasoner
-LLM_MODEL_CHAT=deepseek-chat
-# 换模型后同步改单价，否则成本数字不准（USD / 1M tokens）
-LLM_PRICE_INPUT_PER_M=0.55
-LLM_PRICE_OUTPUT_PER_M=2.19
-```
-
-解析结果可以直接查：`curl -s localhost:8000/healthz | jq .models`。
-
-另外还有两组**非 LLM** 模型配置，别混在一起：
-- `EMBEDDING_BACKEND` / `EMBEDDING_MODEL` / `EMBEDDING_DIM`：向量化（hash / 本地 BGE-M3 / OpenAI 兼容）
-- `RERANK_BACKEND` / `RERANK_MODEL`：精排（none / lexical / cross-encoder）
-
----
-
-## 启动哪些容器
-
-| 容器 | 镜像 | 端口 | 作用 |
-|---|---|---|---|
-| `codepilot-postgres` | postgres:16-alpine | `5434` | 业务表 + LangGraph checkpoint |
-| `codepilot-redis` | redis:7-alpine | `6381` | 任务队列（Streams）+ 限流 |
-| `codepilot-etcd` | etcd v3.5.14 | - | Milvus 元数据 |
-| `codepilot-minio` | minio RELEASE.2023-03-20 | - | Milvus 对象存储 |
-| `codepilot-milvus` | milvus v2.4.9 | `19532` | 向量库（不可用自动降级） |
-| `codepilot-attu` | attu v2.4.12 | `30010` | 向量库可视化 |
-| `codepilot-api` | 自建 | `8000` | HTTP / SSE |
-| `codepilot-worker` | 自建 | - | 消费任务、跑图、调沙箱 |
-| `codepilot/sandbox:py311` | 自建 | 一次性 | 跑生成的单测（断网、限额） |
-
-只跑基础设施 + 本机应用：`docker compose up -d` + `make api`（推荐开发用）。
-
-> 端口默认 `5434 / 6381 / 19532 / 30001`，特意避开了常见默认值和 EduAgent 课程项目占用的
-> `5433 / 6380 / 19531 / 30000`。两个项目可以同时跑。
-全容器：`docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build`
-（app compose 需要和 infra compose 合并使用，因为 api/worker 依赖 infra 里的 postgres/redis）。
-细节与生产加固：[docs/DEPLOY.md](docs/DEPLOY.md)。
-
----
-
-## 架构
+## 系统架构
 
 ```
 GitHub Webhook ──验签──┐
@@ -163,109 +53,130 @@ Manual / Chat ────────┤
         └──────────────► PostgreSQL / Milvus / Docker Sandbox ◄────────────────────┘
 ```
 
-更细的状态设计、reducer 规则、降级矩阵：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-课件章节 → 文件对照表：[docs/COURSE_MAP.md](docs/COURSE_MAP.md)。
+- **接入层**：Webhook 验签后立即返回 `202`，任务写入 Redis Streams，由独立 worker 消费；幂等键为 `(repo, pr, head_sha)`，新 commit 会把旧任务标记为 `superseded`。
+- **编排层**：主图按意图路由到三个子图；状态中只放决策所需的最小集，大文本落库并保留引用。并行写入统一走幂等 reducer，输出顺序稳定可 diff。
+- **能力层**：`backend/core/` 提供 LLM 工厂（多槽位 + mock 模式 + 成本估算）、检索、沙箱、队列、限流、指标等通用能力，与具体的 Agent 逻辑解耦。
 
----
+状态字段、reducer 约束、超时与预算闸门、降级矩阵等细节见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-## API 一览
+## 技术栈
+
+| 层 | 选型 |
+|---|---|
+| 服务 | FastAPI、uvicorn、pydantic-settings、asyncio |
+| 编排 | LangGraph（主图 + 子图、`Send` 扇出、checkpoint、`interrupt`） |
+| 存储 | PostgreSQL 16（业务表 + `AsyncPostgresSaver`）、Redis 7（Streams 队列 + 限流） |
+| 检索 | Milvus 2.4 + Attu（向量）、PG `tsvector`（稀疏）、RRF、lexical / cross-encoder 精排 |
+| 模型 | 任意 OpenAI 兼容网关（默认 DeepSeek）；hash / BGE-M3 / OpenAI 兼容 embedding |
+| 沙箱 | Docker：断网、内存/CPU/PID 限额、`--cap-drop ALL`、非 root 用户 |
+| 前端 | Vue 3 + Vite |
+| 工程 | pytest（47 项单测）、ruff、GitHub Actions、Docker Compose |
+
+## 代码结构
+
+```
+backend/
+  main.py / worker.py / config.py / dependencies.py   入口、队列消费者、配置、鉴权
+  core/        llm_factory · retry · security · logger · exceptions
+               knowledge_base · chunking · embedding · reranker · query_classifier · memory
+               orchestrator · queue · sandbox · github · rate_limit · metrics · review_service
+  db/          session（asyncpg + AsyncPostgresSaver） · migrations
+  agents/
+    review/    state(reducer) · rules(15 条确定性规则) · diff · reviewers · nodes · graph · prompts · persist
+    qa/        state · prompts · nodes（rewrite / retrieve / answer / persist） · graph
+    testgen/   state · prompts · nodes（生成 / 沙箱 / HitL） · graph
+  api/
+    router.py  聚合 v1 路由
+    v1/        auth · reviews · qa · unified_chat（SSE） · webhooks · health
+frontend/      Vue 3 + Vite 单页应用（审查工作台 / 代码问答 / 任务记录）
+scripts/       init_db.sql · seed_data · ingest_repo · demo_review · eval_review
+tests/         diff · rules · reducer · chunking · router · security · sandbox 等纯函数单测
+docs/          ARCHITECTURE（架构与降级） · DEPLOY（部署与运维） · COURSE_MAP / MAPPING（能力与实现对照）
+eval/          人工标注的 diff 样本与评测脚本配置
+```
+
+## 运行方式
+
+```bash
+cp .env.example .env.local      # 填入 LLM_API_KEY（DeepSeek 或任意 OpenAI 兼容网关）
+docker compose up -d            # PostgreSQL / Redis / Milvus / Attu
+make sandbox-image              # 构建单测沙箱镜像
+python3.11 -m venv .venv && make install
+make seed                       # 初始化演示账号 codepilot / codepilot123
+make api                        # http://localhost:8000/docs
+```
+
+`make demo` 会提交一个包含硬编码密钥、SQL 注入、循环内 IO、吞异常、`eval`、缺鉴权的示例 diff，返回 6~8 条 findings，其中 3 条为 `block`、`mergeable=false`。`make ingest REPO=local/demo PATH=./workspace/demo` 可为本地仓库建立检索索引。
+
+全容器部署使用 `docker compose -f docker-compose.yml -f docker-compose.app.yml up -d --build`（app compose 复用 infra compose 中的 postgres/redis）。端口默认错开常见取值：`5434 / 6381 / 19532 / 30010 / 8000`。完整容器清单、生产加固与 Webhook 接入见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+
+无外部依赖模式：`LLM_PROVIDER=mock` 时四维审查完全由 15 条确定性规则完成，RAG 返回抽取式答案，单测链路跳过 LLM；CI 即运行在该模式下（`LLM_PROVIDER=mock`、`SANDBOX_MODE=off`、`EMBEDDING_BACKEND=hash`）。
+
+## 模型配置
+
+LLM 侧只需要 1 个 provider，模型名按用途分为 2 个基础槽位与 5 个可选覆盖槽位，未配置时自动回落：
+
+| 槽位 | 环境变量 | 默认回落 | 使用方 |
+|---|---|---|---|
+| chat | `LLM_MODEL_CHAT` | `deepseek-chat` | 分诊、RAG 回答、查询改写、意图路由、摘要 |
+| code | `LLM_MODEL_CODE` | `deepseek-chat` | 四维审查、单测生成 |
+| review | `LLM_MODEL_REVIEW` | code 槽 | 安全 / 性能 / 规范 / 测试四个 reviewer |
+| testgen | `LLM_MODEL_TESTGEN` | code 槽 | 单测生成 |
+| triage | `LLM_MODEL_TRIAGE` | chat 槽 | PR 分诊 |
+| rag | `LLM_MODEL_RAG` | chat 槽 | 问答与 HyDE 改写 |
+| router | `LLM_MODEL_ROUTER` | chat 槽 | 统一入口意图分类 |
+
+`LLM_PRICE_INPUT_PER_M` / `LLM_PRICE_OUTPUT_PER_M` 用于成本估算，换模型时同步调整。解析结果可通过 `GET /healthz` 的 `models` 字段查看。
+
+非 LLM 模型独立配置：`EMBEDDING_BACKEND` / `EMBEDDING_MODEL` / `EMBEDDING_DIM`（hash、本地 BGE-M3、OpenAI 兼容），`RERANK_BACKEND` / `RERANK_MODEL`（none、lexical、cross-encoder）。
+
+## API
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/v1/auth/login` | 登录拿 JWT |
+| POST | `/api/v1/auth/login` | 登录获取 JWT |
 | GET | `/api/v1/auth/me` | 校验令牌 |
 | POST | `/api/v1/webhooks/github` | PR webhook（HMAC 验签，202） |
-| POST | `/api/v1/reviews` | 手动提交 diff 审查（202） |
-| GET | `/api/v1/reviews/{id}` | 任务状态 + findings + 报告 |
+| POST | `/api/v1/reviews` | 提交 diff 审查（202） |
+| GET | `/api/v1/reviews/{id}` | 任务状态、findings 与报告 |
 | GET | `/api/v1/reviews` | 任务列表 |
 | POST | `/api/v1/reviews/{id}/resume` | HitL 恢复（approve / reject / edit） |
-| POST | `/api/v1/rag/ingest` | 给本地仓库建索引 |
+| POST | `/api/v1/rag/ingest` | 为本地仓库建立索引 |
 | POST | `/api/v1/rag/query` | 代码库问答（带引用） |
 | GET | `/api/v1/rag/repos` | 已索引仓库与 chunk 数 |
-| POST | `/api/v1/chat` | 统一入口（SSE：route/citations/token/result/done） |
+| POST | `/api/v1/chat` | 统一入口（SSE：route / citations / token / result / done） |
 | GET | `/healthz` `/readyz` `/metrics` | 健康检查与指标 |
 | GET | `/` | 前端工作台（Vue SPA） |
 
-```bash
-# 示例：登录 + 提交 diff
-TOKEN=$(curl -s localhost:8000/api/v1/auth/login -H 'content-type: application/json' \
-  -d '{"username":"codepilot","password":"codepilot123"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+## 设计原则
 
-curl -s localhost:8000/api/v1/reviews -H "authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' \
-  -d "{\"repo\":\"local/demo\",\"diff\":$(python3 -c 'import json;print(json.dumps(open("demo.diff").read()))')}"
-```
+1. **确定主干 + 局部自主**。检索是否执行、测试是否生成、沙箱失败是否转人工，都是图上的条件边；只有审查判断本身交给模型。可解释、可测试、成本可控。
+2. **规则引擎与 LLM 分工**。密钥泄漏、SQL 字符串拼接、吞异常等机械问题由 15 条规则零成本零抖动处理；LLM 只补语义理解部分，prompt 中显式列出「已发现」项以避免重复告警。
+3. **证据即门槛**。LLM 给出的 evidence 必须能在 diff 新增行中逐字命中，否则丢弃并计数，使幻觉率成为可观测指标。
+4. **全链路降级**。LLM、Milvus、Redis、Docker、Checkpointer 任一不可用时服务仍可返回结果，响应标记 `degraded` 并给出原因；`/readyz` 暴露依赖状态。
+5. **单写者与幂等 reducer**。四个并行维度只写入 `findings`，去重、跨维仲裁与排序在 reducer 中完成一次，相同输入产生相同顺序的报告。
+6. **成本闸门**。单维超时、token 与成本预算、`recursion_limit`、回灌 ≤2 轮、幂等键、旧任务取消共同约束单次评审的开销与步数。
+7. **安全默认值**。沙箱断网并以最小权限运行；Webhook HMAC 验签；JWT 鉴权与路径白名单；限流按仓库维度 60 秒 30 次。
 
----
+## 评测
 
-## 目录结构
-
-```
-backend/                     # 目录与课件同构，详见 docs/COURSE_MAP.md
-  main.py / worker.py / config.py / dependencies.py
-  core/        logger · exceptions · llm_factory · retry · security      ← 课件第 3 章
-               knowledge_base(Milvus+PG+混合召回) · chunking · embedding
-               reranker · query_classifier · memory                     ← 课件第 5 章
-               orchestrator(主图路由) · queue · sandbox · github
-               rate_limit · review_service · metrics
-  db/          session(asyncpg + AsyncPostgresSaver) · migrations
-  agents/
-    review/    state(reducer) · rules(15条) · diff · reviewers · nodes · graph · prompts · persist
-    qa/        state · prompts · nodes(rewrite/retrieve/answer/persist) · graph
-    testgen/   state · prompts · nodes(生成/沙箱/HitL) · graph
-  api/
-    router.py  聚合所有 v1 路由
-    v1/        auth · reviews · qa · unified_chat(SSE) · webhooks · health
-  mcp/         预留（本项目未启用 MCP Server，见 docs/COURSE_MAP.md）
-frontend/      Vue 3 + Vite（审查工作台 / 代码问答 / 任务记录），dist 随仓库提交
-scripts/       init_db.sql · seed_data · ingest_repo · demo_review · eval_review
-tests/         纯函数单测（diff/rules/reducer/chunking/router/security/sandbox）
-docs/          COURSE_MAP(课件章节→文件) · ARCHITECTURE · MAPPING(EduAgent→CodePilot) · DEPLOY
-```
-
----
-
-## 设计取舍（面试最爱问的部分）
-
-1. **为什么不用「全自主 Agent」**：主干确定、局部自主。检索要不要做、测试要不要生成、沙箱失败要不要进人工，
-   这些是决策点用条件边；审查本身才交给模型。可解释、可测试、成本可控。
-2. **规则引擎 + LLM 而不是纯 LLM**：机械问题（密钥、SQL 拼接、吞异常）规则零成本零抖动；
-   LLM 只补需要语义理解的部分，prompt 里显式告知「已发现」，避免重复告警。
-3. **证据校验**：LLM 的 evidence 必须能在 diff 里逐字命中，否则丢弃并计数。
-   这是把「幻觉」变成可观测指标，而不是靠 prompt 祈祷。
-4. **全链路降级**：Milvus / Redis / Docker / LLM 任意一个挂掉，服务都还能给出结果，只是标 `degraded`。
-5. **单写者 + 幂等 reducer**：四个并行节点只往 `findings` 写，去重和排序在 reducer 里做一次，
-   下游不用再处理重复；同样输入永远同样顺序，报告可 diff。
-6. **成本闸门**：单维超时、token 预算、回灌 ≤2 轮、幂等键、新 commit 取消旧任务。
-
----
-
-## 评测（别写没跑过的数字）
+`eval/` 提供人工标注的 diff 样本与评测脚本，可复现规则引擎维度的准确率：
 
 ```bash
-# 用人工标注的 diff 算 precision / recall / F1（只统计规则引擎，可复现）
 python -m scripts.eval_review --cases eval/cases.json
 ```
 
-当前仓库自带 3 个样本（`eval/`），实测：**precision 0.727 / recall 1.000 / F1 0.842**。
-样本量很小，只能证明「评测链路是通的」，不代表生产效果 —— 请用自己团队的 PR 扩充 `eval/cases.json` 后再写数字。
+仓库自带 3 个样本，实测 precision 0.727 / recall 1.000 / F1 0.842。样本量仅能验证评测链路可用，生产结论需以更大规模的标注集支撑；检索 Recall@K 依据 `/api/v1/rag/query` 返回的 citations 判定，单 PR 成本取 `review_tasks.cost_usd` 均值。
 
-检索质量、单 PR 成本、评审时长的 SQL 口径见 [docs/MAPPING.md](docs/MAPPING.md) 第四节。
-**建议在 README 里贴你自己跑出来的数字和样本量，而不是抄模板。**
-
----
-
-## 已知限制 / Roadmap
+## 已知限制与 Roadmap
 
 - [ ] GitLab 适配器（`repos.provider` 已留枚举，暂无实现）
-- [ ] 多租户 RLS（当前靠查询条件隔离）
-- [ ] 沙箱独立服务化（当前 worker 调宿主机 Docker）
+- [ ] 多租户行级安全（当前依靠查询条件隔离）
+- [ ] 沙箱独立服务化（当前由 worker 调用宿主机 Docker，权限等价于宿主机 root，仅适用于内网/演示环境）
 - [ ] 前端：Markdown 完整渲染、diff 高亮、任务详情分享链接
 - [ ] Contextual RAG（chunk 摘要增强）
-- [ ] 评测集扩充 + LLM 维度自动化回归
-
----
+- [ ] 评测集扩充与 LLM 维度自动化回归
 
 ## License
 
-MIT。密钥、`.env.local`、`workspace/` 已在 `.gitignore` 中，请勿提交。
+MIT。密钥、`.env.local`、`workspace/` 已在 `.gitignore` 中，不应提交。
